@@ -1,6 +1,6 @@
 """Correctness tests for Edmonds-Karp against small, hand-verifiable graphs."""
 
-from maxflow.edmonds_karp import edmonds_karp
+from maxflow.edmonds_karp import edmonds_karp, find_min_cut
 
 
 def test_single_path_bottleneck():
@@ -49,3 +49,26 @@ def test_no_path_gives_zero_flow():
     }
     max_flow, _ = edmonds_karp(graph, "S", "T")
     assert max_flow == 0
+
+
+def test_min_cut_on_single_path():
+    """S -> A -> T: the only cut is the bottleneck edge A -> T (capacity 3)."""
+    graph = {
+        "S": {"A": 5},
+        "A": {"T": 3},
+    }
+    cut_value, cut_edges = find_min_cut(graph, "S", "T")
+    assert cut_value == 3
+    assert cut_edges == [("A", "T")]
+
+
+def test_min_cut_matches_max_flow_on_shared_node_graph():
+    """Hand-verified min-cut ({S, A, B}, {T}): edges A->T (4) + B->T (9) = 13."""
+    graph = {
+        "S": {"A": 10, "B": 10},
+        "A": {"B": 2, "T": 4},
+        "B": {"T": 9},
+    }
+    cut_value, cut_edges = find_min_cut(graph, "S", "T")
+    assert cut_value == 13
+    assert set(cut_edges) == {("A", "T"), ("B", "T")}
