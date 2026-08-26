@@ -27,7 +27,7 @@ can operate directly on graphs produced by graph_builder.py.
 """
 
 from collections import deque
-from typing import Dict, Hashable, List, Optional, Tuple
+from typing import Dict, Hashable, List, Optional, Set, Tuple
 
 Node = Hashable
 Graph = Dict[Node, Dict[Node, float]]
@@ -111,3 +111,49 @@ def edmonds_karp(graph: Graph, source: Node, sink: Node) -> Tuple[float, Graph]:
         max_flow += bottleneck
 
     return max_flow, residual
+
+
+def find_reachable_from_source(residual: Graph, source: Node) -> Set[Node]:
+    """Return the set of nodes reachable from `source` over positive-residual edges.
+
+    Once Edmonds-Karp terminates, this reachable set is exactly the
+    "source side" of the min-cut: no augmenting path remains, so no
+    positive-residual edge crosses from this set to the rest of the graph.
+    """
+    visited = {source}
+    queue = deque([source])
+
+    while queue:
+        u = queue.popleft()
+        for v, capacity in residual.get(u, {}).items():
+            if capacity > 0 and v not in visited:
+                visited.add(v)
+                queue.append(v)
+
+    return visited
+
+
+def find_min_cut(
+    graph: Graph, source: Node, sink: Node
+) -> Tuple[float, List[Tuple[Node, Node]]]:
+    """Compute the min-cut of `graph` between `source` and `sink`.
+
+    Runs Edmonds-Karp to completion, then partitions the nodes by which
+    side of the final residual graph they're reachable from `source` on.
+    The cut edges are the original graph's edges that cross from the
+    reachable side to the unreachable side; by the max-flow min-cut
+    theorem their capacities sum to the max-flow value.
+
+    Returns (min_cut_value, cut_edges).
+    """
+    max_flow, residual = edmonds_karp(graph, source, sink)
+    reachable = find_reachable_from_source(residual, source)
+
+    cut_edges = [
+        (u, v)
+        for u, neighbors in graph.items()
+        for v, capacity in neighbors.items()
+        if capacity > 0 and u in reachable and v not in reachable
+    ]
+
+    return max_flow, cut_edges
