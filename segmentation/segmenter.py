@@ -1,21 +1,39 @@
 """
 Top-level segmentation orchestration.
 
-Plan:
-- Expose a single entry point, e.g. segment(image, fg_markers, bg_markers),
-  that ties together graph_builder and edmonds_karp:
-    1. Build the flow network from the image and user markers
-       (maxflow.graph_builder.build_graph).
-    2. Run max-flow/min-cut on that network (maxflow.edmonds_karp).
-    3. Map the resulting min-cut partition back to pixel coordinates to
-       produce a binary foreground/background mask.
-- Post-processing: optional cleanup of the mask (e.g. removing small
-  isolated regions) before returning it.
-- Return value: a mask (same H x W as the input image) plus any
-  intermediate data useful for visualization (e.g. cut edges, timing
-  info) so app.py can render results and confirm the <2s performance
-  target.
-- This module should stay independent of the Streamlit UI layer in
-  app.py so the segmentation logic can be unit-tested in isolation
-  (see tests/).
+Ties maxflow.graph_builder (image + scribbles -> flow network) and
+maxflow.edmonds_karp (network -> max-flow / min-cut) together into a single
+segment() call that returns a foreground/background pixel mask.
 """
+
+import numpy as np
+
+from maxflow.edmonds_karp import edmonds_karp, find_reachable_from_source
+from maxflow.graph_builder import SINK, SOURCE, build_graph
+
+
+def segment(
+    image: np.ndarray,
+    scribble_mask: np.ndarray,
+    n_link_weight: float = 50.0,
+    num_bins: int = 32,
+) -> np.ndarray:
+    """Segment `image` into foreground/background given `scribble_mask`.
+
+    Returns a boolean (H, W) mask where True marks pixels grouped with the
+    source terminal (foreground) by the min-cut.
+    """
+    height, width = scribble_mask.shape
+    graph = build_graph(image, scribble_mask, n_link_weight=n_link_weight, num_bins=num_bins)
+
+    _, residual = edmonds_karp(graph, SOURCE, SINK)
+    foreground_nodes = find_reachable_from_source(residual, SOURCE)
+
+    mask = np.zeros((height, width), dtype=bool)
+    for node in foreground_nodes:
+        if node == SOURCE:
+            continue
+        row, col = node
+        mask[row, col] = True
+
+    return mask
