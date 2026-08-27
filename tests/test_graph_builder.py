@@ -2,7 +2,17 @@
 
 import numpy as np
 
-from maxflow.graph_builder import _build_n_links, _estimate_beta, _to_grayscale
+from maxflow.graph_builder import (
+    BACKGROUND,
+    FOREGROUND,
+    SINK,
+    SOURCE,
+    UNMARKED,
+    _build_n_links,
+    _estimate_beta,
+    _to_grayscale,
+    build_graph,
+)
 
 
 def test_to_grayscale_averages_equal_channels():
@@ -28,3 +38,40 @@ def test_n_links_favor_similar_neighbors():
     similar_weight = graph[(0, 0)][(0, 1)]
     different_weight = graph[(0, 1)][(0, 2)]
     assert similar_weight > different_weight
+
+
+def test_build_graph_requires_both_labels():
+    image = np.zeros((2, 2, 3), dtype=np.uint8)
+    scribble_mask = np.full((2, 2), UNMARKED, dtype=np.uint8)
+    try:
+        build_graph(image, scribble_mask)
+        assert False, "expected ValueError for a scribble mask missing a label"
+    except ValueError:
+        pass
+
+
+def test_scribbled_pixels_get_hard_constraints():
+    image = np.zeros((2, 2, 3), dtype=np.uint8)
+    image[0, 0] = 10
+    image[1, 1] = 250
+    scribble_mask = np.array(
+        [[FOREGROUND, UNMARKED],
+         [UNMARKED, BACKGROUND]],
+        dtype=np.uint8,
+    )
+    graph = build_graph(image, scribble_mask)
+
+    max_n_link_weight = max(
+        weight
+        for node, neighbors in graph.items()
+        for target, weight in neighbors.items()
+        if node != SOURCE and target != SINK
+    )
+
+    # Hard constraints must dominate every N-link weight, or the min-cut
+    # could still relabel a pixel the user explicitly scribbled.
+    assert graph[SOURCE][(0, 0)] > max_n_link_weight
+    assert SINK not in graph.get((0, 0), {})
+
+    assert graph[(1, 1)][SINK] > max_n_link_weight
+    assert (1, 1) not in graph[SOURCE]

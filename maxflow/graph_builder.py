@@ -33,6 +33,13 @@ from typing import Dict, Tuple
 
 import numpy as np
 
+SOURCE = "S"
+SINK = "T"
+
+UNMARKED = 0
+FOREGROUND = 1
+BACKGROUND = 2
+
 Node = Tuple[int, int]
 Graph = Dict[object, Dict[object, float]]
 
@@ -89,3 +96,78 @@ def _build_n_links(gray: np.ndarray, n_link_weight: float) -> Tuple[Graph, np.nd
                 add_edge((row, col), (row + 1, col), weight)
 
     return graph, neighbor_weight_sum
+
+
+def _color_histogram(gray: np.ndarray, mask: np.ndarray, num_bins: int) -> np.ndarray:
+    """Build a normalized intensity histogram over the pixels selected by `mask`."""
+    values = gray[mask]
+    histogram, _ = np.histogram(values, bins=num_bins, range=(0, 255))
+    histogram = histogram.astype(np.float64) + 1.0  # Laplace smoothing avoids log(0).
+    return histogram / histogram.sum()
+
+
+def _bin_indices(gray: np.ndarray, num_bins: int) -> np.ndarray:
+    """Map each pixel's intensity to its histogram bin index."""
+    bin_width = 256.0 / num_bins
+    return np.clip((gray // bin_width).astype(int), 0, num_bins - 1)
+
+
+def build_graph(
+    image: np.ndarray,
+    scribble_mask: np.ndarray,
+    n_link_weight: float = 50.0,
+    num_bins: int = 32,
+) -> Graph:
+    """Build the Boykov-Jolly pixel graph for `image` given `scribble_mask`.
+
+    `scribble_mask` is an (H, W) array whose entries are one of UNMARKED,
+    FOREGROUND, or BACKGROUND. Returns a graph with source node SOURCE and
+    sink node SINK, ready to pass to maxflow.edmonds_karp.
+    """
+    gray = _to_grayscale(image)
+    height, width = gray.shape
+
+    graph, neighbor_weight_sum = _build_n_links(gray, n_link_weight)
+
+    fg_mask = scribble_mask == FOREGROUND
+    bg_mask = scribble_mask == BACKGROUND
+    if not fg_mask.any() or not bg_mask.any():
+        raise ValueError(
+            "scribble_mask must contain at least one FOREGROUND and one BACKGROUND pixel"
+        )
+
+    fg_histogram = _color_histogram(gray, fg_mask, num_bins)
+    bg_histogram = _color_histogram(gray, bg_mask, num_bins)
+    bin_indices = _bin_indices(gray, num_bins)
+
+    # K must exceed any possible sum of N-link weights at a single pixel, so
+    # a hard-constrained pixel's t-link is never the cheapest thing to cut.
+    hard_constraint = 1.0 + neighbor_weight_sum.max()
+
+    graph.setdefault(SOURCE, {})
+    for row in range(height):
+        for col in range(width):
+            pixel: Node = (row, col)
+            label = scribble_mask[row, col]
+
+            if label == FOREGROUND:
+                source_capacity = hard_constraint
+                sink_capacity = 0.0
+            elif label == BACKGROUND:
+                source_capacity = 0.0
+                sink_capacity = hard_constraint
+            else:
+                bin_idx = bin_indices[row, col]
+                prob_bg = bg_histogram[bin_idx]
+                prob_fg = fg_histogram[bin_idx]
+                # Regional cost of a label is low when the pixel resembles
+                # the *other* label's model -- see the module docstring.
+                source_capacity = -np.log(prob_bg)
+                sink_capacity = -np.log(prob_fg)
+
+            if source_capacity > 0:
+                graph[SOURCE][pixel] = source_capacity
+            if sink_capacity > 0:
+                graph.setdefault(pixel, {})[SINK] = sink_capacity
+
+    return graph
