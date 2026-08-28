@@ -1,5 +1,6 @@
 """Streamlit front end for interactive min-cut segmentation."""
 
+import io
 import time
 
 import numpy as np
@@ -107,3 +108,12 @@ if uploaded_file is not None:
             st.image(cutout, caption="Segmented result")
 
         st.write(f"Segmentation took {elapsed_seconds:.2f} seconds")
+
+        result_buffer = io.BytesIO()
+        Image.fromarray(cutout).save(result_buffer, format="PNG")
+        st.download_button(
+            "Download result",
+            data=result_buffer.getvalue(),
+            file_name="segmentation_result.png",
+            mime="image/png",
+        )
