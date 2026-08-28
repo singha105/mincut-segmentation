@@ -1,11 +1,14 @@
 """Streamlit front end for interactive min-cut segmentation."""
 
+import time
+
 import numpy as np
 import streamlit as st
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 
 from canvas_utils import BACKGROUND_COLOR, FOREGROUND_COLOR, rasterize_scribbles
+from segmentation.segmenter import segment
 
 # Edmonds-Karp is O(V * E^2), so segmentation runs on a small downscaled copy
 # of the image (see graph_builder.py / test_segmentation.py for the same
@@ -56,7 +59,9 @@ if uploaded_file is not None:
         key="scribble_canvas",
     )
 
-    if canvas_result.json_data is not None and canvas_result.json_data["objects"]:
+    has_scribbles = canvas_result.json_data is not None and canvas_result.json_data["objects"]
+
+    if st.button("Segment", disabled=not has_scribbles):
         scale_x = processing_image.width / display_image.width
         scale_y = processing_image.height / display_image.height
         scribble_mask = rasterize_scribbles(
@@ -65,8 +70,40 @@ if uploaded_file is not None:
             scale_x=scale_x,
             scale_y=scale_y,
         )
-        st.image(
-            scribble_mask * 127,
-            caption="Scribble mask preview (processing resolution)",
-            width=200,
-        )
+        image_array = np.array(processing_image)
+
+        try:
+            start_time = time.perf_counter()
+            mask = segment(image_array, scribble_mask)
+            elapsed_seconds = time.perf_counter() - start_time
+        except ValueError as error:
+            st.error(str(error))
+        else:
+            st.session_state["result"] = {
+                "mask": mask,
+                "elapsed_seconds": elapsed_seconds,
+                "scribble_preview": canvas_result.image_data,
+            }
+
+    if "result" in st.session_state:
+        mask = st.session_state["result"]["mask"]
+        elapsed_seconds = st.session_state["result"]["elapsed_seconds"]
+        scribble_preview = st.session_state["result"]["scribble_preview"]
+
+        mask_image = Image.fromarray((mask * 255).astype(np.uint8))
+        mask_display = np.array(
+            mask_image.resize(display_image.size, Image.Resampling.NEAREST)
+        ) > 127
+
+        cutout = np.array(display_image).copy()
+        cutout[~mask_display] = cutout[~mask_display] // 4
+
+        result_col1, result_col2, result_col3 = st.columns(3)
+        with result_col1:
+            st.image(display_image, caption="Original")
+        with result_col2:
+            st.image(scribble_preview, caption="Scribble mask")
+        with result_col3:
+            st.image(cutout, caption="Segmented result")
+
+        st.write(f"Segmentation took {elapsed_seconds:.2f} seconds")
