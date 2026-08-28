@@ -3,7 +3,7 @@
 Built an interactive image segmentation tool using max-flow/min-cut graph algorithms, achieving segmentation on user-marked images in under 2s.
 
 **Try it live:** [singha105.github.io/mincut-segmentation](https://singha105.github.io/mincut-segmentation/)
-*(a JavaScript port of the same Edmonds-Karp pipeline runs right on the page — upload any image, scribble, and segment, no install needed. The Python/Streamlit app in this repo is the original reference implementation; see [Setup](#setup) to run it locally.)*
+*(no install needed — see [Try it in your browser](#try-it-in-your-browser) below. The Python/Streamlit app in this repo is the original reference implementation; see [Setup](#setup) to run it locally.)*
 
 ## Demo
 
@@ -11,6 +11,20 @@ Actual output of `segment()` on each sample image — a couple of scribbled
 pixels in, a foreground/background mask out:
 
 ![Demo: original, scribbles, and segmented result for each sample image](docs/demo.png)
+
+## Try it in your browser
+
+The [live page](https://singha105.github.io/mincut-segmentation/) is a fully
+working version of the tool, no install required:
+
+- **Upload** any image, not just the samples above
+- **Scribble** red for foreground / blue for background, with an adjustable brush size
+- **Segment** — runs the same Edmonds-Karp min-cut pipeline as a JavaScript
+  port ([`docs/segmentation.js`](docs/segmentation.js)), entirely client-side
+- **Download** the result as a PNG
+
+There's no backend involved: image decoding, graph construction, and the
+max-flow solve all happen in your browser via plain JavaScript.
 
 ## Setup
 
@@ -73,3 +87,4 @@ iterations.
 - `app.py` — Streamlit UI for marking foreground/background and viewing results
 - `sample_images/` — small synthetic images for manual testing and demos
 - `tests/` — automated tests
+- `docs/` — the [GitHub Pages site](https://singha105.github.io/mincut-segmentation/): `index.html`/`segmentation.js` (a client-side JS port with upload/scribble/segment/download) and `demo.png` (the static demo image)
