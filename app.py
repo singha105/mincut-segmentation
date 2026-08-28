@@ -5,16 +5,36 @@ import time
 
 import numpy as np
 import streamlit as st
+import streamlit.elements.image as st_image
 from PIL import Image
+from streamlit import runtime
 from streamlit_drawable_canvas import st_canvas
 
 from canvas_utils import BACKGROUND_COLOR, FOREGROUND_COLOR, rasterize_scribbles
 from segmentation.segmenter import segment
 
+# streamlit-drawable-canvas 0.9.3 calls the private st_image.image_to_url(),
+# which newer Streamlit releases renamed/restructured. The canvas frontend
+# prepends the app's own origin to whatever URL this returns, so it must be
+# a relative media-manager path (like the original) -- not an absolute URL
+# or data URI, which would come out corrupted after that concatenation.
+# Only applied if the real function is actually missing, so this is a no-op
+# on Streamlit versions where streamlit-drawable-canvas still works natively.
+if not hasattr(st_image, "image_to_url"):
+
+    def _image_to_url(image, width, clamp, channels, output_format, image_id):
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return runtime.get_instance().media_file_mgr.add(
+            buffer.getvalue(), "image/png", image_id
+        )
+
+    st_image.image_to_url = _image_to_url
+
 # Edmonds-Karp is O(V * E^2), so segmentation runs on a small downscaled copy
 # of the image (see graph_builder.py / test_segmentation.py for the same
 # constraint). The canvas is shown much larger purely so scribbling is usable.
-PROCESSING_MAX_DIM = 50
+PROCESSING_MAX_DIM = 30
 DISPLAY_MAX_DIM = 400
 
 
