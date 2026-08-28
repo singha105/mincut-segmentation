@@ -5,8 +5,7 @@ import streamlit as st
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 
-FOREGROUND_COLOR = "#ff0000"
-BACKGROUND_COLOR = "#0000ff"
+from canvas_utils import BACKGROUND_COLOR, FOREGROUND_COLOR, rasterize_scribbles
 
 # Edmonds-Karp is O(V * E^2), so segmentation runs on a small downscaled copy
 # of the image (see graph_builder.py / test_segmentation.py for the same
@@ -56,3 +55,18 @@ if uploaded_file is not None:
         drawing_mode="freedraw",
         key="scribble_canvas",
     )
+
+    if canvas_result.json_data is not None and canvas_result.json_data["objects"]:
+        scale_x = processing_image.width / display_image.width
+        scale_y = processing_image.height / display_image.height
+        scribble_mask = rasterize_scribbles(
+            canvas_result.json_data["objects"],
+            mask_shape=(processing_image.height, processing_image.width),
+            scale_x=scale_x,
+            scale_y=scale_y,
+        )
+        st.image(
+            scribble_mask * 127,
+            caption="Scribble mask preview (processing resolution)",
+            width=200,
+        )
