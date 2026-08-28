@@ -2,6 +2,13 @@
 
 Built an interactive image segmentation tool using max-flow/min-cut graph algorithms, achieving segmentation on user-marked images in under 2s.
 
+## Demo
+
+Actual output of `segment()` on each sample image — a couple of scribbled
+pixels in, a foreground/background mask out:
+
+![Demo: original, scribbles, and segmented result for each sample image](docs/demo.png)
+
 ## Setup
 
 ```bash
