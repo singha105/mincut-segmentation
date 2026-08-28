@@ -2,6 +2,9 @@
 
 Built an interactive image segmentation tool using max-flow/min-cut graph algorithms, achieving segmentation on user-marked images in under 2s.
 
+**Project page:** [singha105.github.io/mincut-segmentation](https://singha105.github.io/mincut-segmentation/)
+*(a static overview — the interactive app itself needs a live Python server, so it runs locally; see [Setup](#setup) below.)*
+
 ## Demo
 
 Actual output of `segment()` on each sample image — a couple of scribbled
