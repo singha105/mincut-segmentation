@@ -285,6 +285,141 @@
 
   footer a { color: var(--muted); }
   footer a:hover { color: var(--text); }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .try-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .try-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .file-label { cursor: pointer; }
+  .file-label .btn { pointer-events: none; }
+
+  .scribble-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .radio-group {
+    display: flex;
+    gap: 14px;
+  }
+
+  .radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .brush-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brush-label input[type="range"] {
+    width: 110px;
+  }
+
+  .canvas-wrap {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  #tryCanvas {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    image-rendering: pixelated;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .try-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .try-status {
+    color: var(--muted);
+    font-size: 0.88rem;
+    font-family: var(--mono);
+  }
+
+  .try-status-error { color: var(--red); }
+
+  .try-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    width: 100%;
+  }
+
+  .try-results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    width: 100%;
+  }
+
+  .result-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .result-panel canvas {
+    max-width: 100%;
+    height: auto;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    image-rendering: pixelated;
+  }
+
+  .result-caption {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  @media (max-width: 560px) {
+    .try-results-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 </head>
 <body>
@@ -308,11 +443,12 @@
       segmentation mask in under 2 seconds.
     </p>
     <div class="cta-row">
-      <a class="btn primary" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">View source</a>
-      <a class="btn secondary" href="#get-started">Run it locally</a>
+      <a class="btn primary" href="#try-it">Try it now</a>
+      <a class="btn secondary" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">View source</a>
     </div>
     <div class="badges">
       <span class="badge">Python</span>
+      <span class="badge">JavaScript</span>
       <span class="badge">Streamlit</span>
       <span class="badge">NumPy</span>
       <span class="badge">OpenCV</span>
@@ -332,6 +468,64 @@
     </p>
     <div class="demo-card">
       <img src="demo.png" alt="Original, scribbles, and segmented result for three sample images">
+    </div>
+  </div>
+</section>
+
+<section id="try-it">
+  <div class="wrap">
+    <h2>Try it in your browser</h2>
+    <p class="section-sub">
+      A JavaScript port of the same Edmonds-Karp min-cut pipeline runs right
+      here — no server involved. Upload any image, scribble, and segment.
+    </p>
+
+    <div class="try-card">
+      <div class="try-controls">
+        <label class="file-label">
+          <input type="file" id="tryFileInput" accept="image/*" class="visually-hidden">
+          <span class="btn secondary">Upload an image</span>
+        </label>
+
+        <div class="scribble-controls" id="scribbleControls" hidden>
+          <div class="radio-group">
+            <label><input type="radio" name="scribbleMode" value="fg" checked> Foreground (red)</label>
+            <label><input type="radio" name="scribbleMode" value="bg"> Background (blue)</label>
+          </div>
+          <label class="brush-label">
+            Brush size
+            <input type="range" id="brushSize" min="1" max="25" value="6">
+          </label>
+          <button class="btn secondary" id="clearScribblesBtn" type="button">Clear scribbles</button>
+        </div>
+      </div>
+
+      <div id="canvasWrap" class="canvas-wrap" hidden>
+        <canvas id="tryCanvas"></canvas>
+      </div>
+
+      <div class="try-actions" id="tryActions" hidden>
+        <button class="btn primary" id="segmentBtn" type="button">Segment</button>
+        <span id="tryStatus" class="try-status"></span>
+      </div>
+
+      <div id="tryResults" class="try-results" hidden>
+        <div class="try-results-grid">
+          <div class="result-panel">
+            <canvas id="originalResultCanvas"></canvas>
+            <div class="result-caption">Original</div>
+          </div>
+          <div class="result-panel">
+            <canvas id="scribbleResultCanvas"></canvas>
+            <div class="result-caption">Scribbles</div>
+          </div>
+          <div class="result-panel">
+            <canvas id="resultCanvas"></canvas>
+            <div class="result-caption">Segmented result</div>
+          </div>
+        </div>
+        <button class="btn primary" id="downloadBtn" type="button">Download result</button>
+      </div>
     </div>
   </div>
 </section>
@@ -379,7 +573,7 @@
 <section id="get-started">
   <div class="wrap">
     <h2>Get started</h2>
-    <p class="section-sub">The interactive app runs locally — GitHub Pages can host this page, but not a live Python server.</p>
+    <p class="section-sub">Want the original Python reference implementation instead of the in-browser JavaScript port above? Run it locally:</p>
     <div class="code-block"><div><span class="comment"># clone and set up</span>
 git clone https://github.com/singha105/mincut-segmentation.git
 cd mincut-segmentation
@@ -412,6 +606,10 @@ streamlit run app.py</div></div>
         <div class="label">tests/</div>
         <div class="desc">Hand-verified graph cases + integration tests</div>
       </div>
+      <div class="stack-item">
+        <div class="label">docs/segmentation.js</div>
+        <div class="desc">Client-side port powering the try-it-yourself demo above</div>
+      </div>
     </div>
   </div>
 </section>
@@ -423,5 +621,6 @@ streamlit run app.py</div></div>
   </div>
 </footer>
 
+<script src="segmentation.js"></script>
 </body>
 </html>

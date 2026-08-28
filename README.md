@@ -2,8 +2,8 @@
 
 Built an interactive image segmentation tool using max-flow/min-cut graph algorithms, achieving segmentation on user-marked images in under 2s.
 
-**Project page:** [singha105.github.io/mincut-segmentation](https://singha105.github.io/mincut-segmentation/)
-*(a static overview — the interactive app itself needs a live Python server, so it runs locally; see [Setup](#setup) below.)*
+**Try it live:** [singha105.github.io/mincut-segmentation](https://singha105.github.io/mincut-segmentation/)
+*(a JavaScript port of the same Edmonds-Karp pipeline runs right on the page — upload any image, scribble, and segment, no install needed. The Python/Streamlit app in this repo is the original reference implementation; see [Setup](#setup) to run it locally.)*
 
 ## Demo
 
