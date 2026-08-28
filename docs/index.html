@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mincut-segmentation</title>
+<meta name="description" content="Interactive image segmentation using max-flow/min-cut graph algorithms.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2235%22 cy=%2250%22 r=%2228%22 fill=%22%23ef4444%22/><circle cx=%2265%22 cy=%2250%22 r=%2228%22 fill=%22%233b82f6%22 opacity=%220.85%22/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0c0f;
+    --bg-alt: #0f1115;
+    --card: #15171c;
+    --card-border: #262a31;
+    --text: #e8e9eb;
+    --muted: #9aa0a8;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  header.nav {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .nav .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .brand .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--red), var(--blue));
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .nav a.gh {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.92rem;
+    border: 1px solid var(--card-border);
+    padding: 7px 14px;
+    border-radius: 8px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .nav a.gh:hover {
+    color: var(--text);
+    border-color: #3a3f48;
+  }
+
+  .hero {
+    padding: 84px 0 56px;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.1rem, 5vw, 3.2rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+    background: linear-gradient(120deg, var(--red) 0%, #f3f4f6 45%, var(--blue) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero p.tagline {
+    max-width: 620px;
+    margin: 0 auto 34px;
+    color: var(--muted);
+    font-size: 1.1rem;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+
+  .btn:hover { transform: translateY(-1px); }
+
+  .btn.primary {
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .btn.secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--card-border);
+  }
+
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin: 30px 0 0;
+  }
+
+  .badge {
+    font-size: 0.78rem;
+    color: var(--muted);
+    border: 1px solid var(--card-border);
+    background: var(--card);
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-family: var(--mono);
+  }
+
+  section { padding: 52px 0; }
+  section h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+  section p.section-sub {
+    color: var(--muted);
+    margin: 0 0 28px;
+    max-width: 620px;
+  }
+
+  .demo-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 20px 60px -30px rgba(0,0,0,0.6);
+  }
+
+  .demo-card img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    display: block;
+  }
+
+  .steps {
+    display: grid;
+    gap: 16px;
+  }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+
+  .step .num {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: var(--bg-alt);
+    border: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+
+  .step h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .step p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.94rem;
+  }
+
+  .code-block {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    overflow-x: auto;
+    color: #d7dadf;
+  }
+
+  .code-block .comment { color: var(--muted); }
+  .code-block div { white-space: pre; }
+
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .stack-item {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+
+  .stack-item .label {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .stack-item .desc {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+
+  footer {
+    border-top: 1px solid var(--card-border);
+    padding: 32px 0 48px;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+
+  footer .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <span class="dot"></span>
+      mincut-segmentation
+    </a>
+    <a class="gh" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+</header>
+
+<div id="top" class="hero">
+  <div class="wrap">
+    <h1>Interactive segmentation<br>via graph min-cut</h1>
+    <p class="tagline">
+      Scribble red for foreground, blue for background — an Edmonds-Karp
+      max-flow / min-cut solve turns a few marked pixels into a clean
+      segmentation mask in under 2 seconds.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">View source</a>
+      <a class="btn secondary" href="#get-started">Run it locally</a>
+    </div>
+    <div class="badges">
+      <span class="badge">Python</span>
+      <span class="badge">Streamlit</span>
+      <span class="badge">NumPy</span>
+      <span class="badge">OpenCV</span>
+      <span class="badge">Pillow</span>
+      <span class="badge">pytest</span>
+      <span class="badge">MIT License</span>
+    </div>
+  </div>
+</div>
+
+<section id="demo">
+  <div class="wrap">
+    <h2>See it work</h2>
+    <p class="section-sub">
+      Real output of <code style="font-family: var(--mono);">segment()</code>
+      on each sample image — original, scribbles, and the resulting mask.
+    </p>
+    <div class="demo-card">
+      <img src="demo.png" alt="Original, scribbles, and segmented result for three sample images">
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="section-sub">
+      Segmentation is framed as a min-cut problem over a pixel graph, following
+      the Boykov-Jolly interactive graph-cut formulation.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <span class="num">1</span>
+        <div>
+          <h3>Build the pixel graph</h3>
+          <p>Every pixel becomes a node, plus two terminals — a source (foreground) and a sink (background). Neighboring pixels get an edge weighted by color similarity (N-links); every pixel gets an edge to each terminal weighted by how well it matches the scribbled color histograms (T-links).</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="num">2</span>
+        <div>
+          <h3>Lock in the scribbles</h3>
+          <p>Pixels you scribble get a hard-constrained terminal edge, so the solver can never relabel a pixel you've explicitly marked.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="num">3</span>
+        <div>
+          <h3>Solve max-flow with Edmonds-Karp</h3>
+          <p>BFS repeatedly finds the shortest augmenting path from source to sink and pushes flow along it, until no path remains — implemented from scratch in <code style="font-family: var(--mono);">maxflow/edmonds_karp.py</code>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="num">4</span>
+        <div>
+          <h3>Read off the cut</h3>
+          <p>Whatever's still reachable from the source in the final residual graph is foreground; everything else is background. By the max-flow min-cut theorem, that cut is optimal.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="get-started">
+  <div class="wrap">
+    <h2>Get started</h2>
+    <p class="section-sub">The interactive app runs locally — GitHub Pages can host this page, but not a live Python server.</p>
+    <div class="code-block"><div><span class="comment"># clone and set up</span>
+git clone https://github.com/singha105/mincut-segmentation.git
+cd mincut-segmentation
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+<span class="comment"># run the app</span>
+streamlit run app.py</div></div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <h2>Under the hood</h2>
+    <div class="stack-grid">
+      <div class="stack-item">
+        <div class="label">maxflow/</div>
+        <div class="desc">Edmonds-Karp max-flow &amp; pixel graph construction</div>
+      </div>
+      <div class="stack-item">
+        <div class="label">segmentation/</div>
+        <div class="desc">Orchestrates graph → min-cut → mask</div>
+      </div>
+      <div class="stack-item">
+        <div class="label">app.py</div>
+        <div class="desc">Streamlit UI with a drawable canvas</div>
+      </div>
+      <div class="stack-item">
+        <div class="label">tests/</div>
+        <div class="desc">Hand-verified graph cases + integration tests</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>MIT License</span>
+    <a href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">github.com/singha105/mincut-segmentation</a>
+  </div>
+</footer>
+
+</body>
+</html>
