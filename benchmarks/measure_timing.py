@@ -19,7 +19,11 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from maxflow.graph_builder import BACKGROUND, FOREGROUND, UNMARKED
-from segmentation.segmenter import DEFAULT_PROCESSING_MAX_DIM, segment_image
+from segmentation.segmenter import (
+    DEFAULT_PROCESSING_MAX_DIM,
+    _processing_size,
+    segment_image,
+)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPEATS = 3
@@ -84,8 +88,11 @@ def time_call(fn, repeats=REPEATS):
 def main():
     print(f"cut grid capped at {DEFAULT_PROCESSING_MAX_DIM}px on the longest side")
     print(f"best of {REPEATS} runs\n")
-    print(f"{'image':<12} {'input resolution':<18} {'megapixels':>10} {'time (s)':>10}")
-    print("-" * 54)
+    print(
+        f"{'image':<12} {'input resolution':<18} {'megapixels':>10} "
+        f"{'cut grid':>10} {'nodes':>7} {'time (s)':>10}"
+    )
+    print("-" * 72)
 
     worst = 0.0
     for name in sorted(SCRIBBLES):
@@ -93,17 +100,30 @@ def main():
             image = load(name, longest_side)
             scribbles = paint_scribbles(image.shape[:2], SCRIBBLES[name])
             height, width = image.shape[:2]
+            proc_height, proc_width = _processing_size(
+                height, width, DEFAULT_PROCESSING_MAX_DIM
+            )
 
             elapsed = time_call(lambda: segment_image(image, scribbles))
             worst = max(worst, elapsed)
 
-            resolution = f"{width}x{height}"
-            megapixels = (width * height) / 1e6
-            print(f"{name:<12} {resolution:<18} {megapixels:>10.2f} {elapsed:>10.2f}")
+            print(
+                f"{name:<12} {f'{width}x{height}':<18} {(width * height) / 1e6:>10.2f} "
+                f"{f'{proc_width}x{proc_height}':>10} {proc_width * proc_height:>7} "
+                f"{elapsed:>10.2f}"
+            )
 
-    print("-" * 54)
+    print("-" * 72)
     print(f"slowest case: {worst:.2f}s")
     print("under 2s target:", "PASS" if worst < 2.0 else "FAIL")
+    print()
+    print(
+        "Note: the cut grid is the same at every input resolution, so the solver does\n"
+        "the same amount of work in each row. Timings still differ a little because\n"
+        "downscaling from a different source changes the grid's pixel values by a level\n"
+        "or two, and the augmenting-path count is sensitive to that. Run-to-run spread\n"
+        "is ~2%, so differences below ~5% between rows are not meaningful."
+    )
 
 
 if __name__ == "__main__":

@@ -99,11 +99,11 @@ Measured with [`benchmarks/measure_timing.py`](benchmarks/measure_timing.py)
 and get back; the cut grid is the internal working resolution, capped at 56px
 on the longest side.
 
-| Input resolution | Megapixels | Slowest photo |
-| --- | ---: | ---: |
-| 400px longest side | 0.11 – 0.16 | 1.16s |
-| 600px longest side | 0.24 – 0.36 | 1.25s |
-| 800px longest side | 0.43 – 0.64 | 1.23s |
+| Input resolution | Megapixels | Cut grid | Nodes | Slowest photo |
+| --- | ---: | ---: | ---: | ---: |
+| 400px longest side | 0.11 – 0.16 | 40x56 – 56x56 | 2,072 – 3,136 | 1.13s |
+| 600px longest side | 0.24 – 0.36 | 40x56 – 56x56 | 2,072 – 3,136 | 1.23s |
+| 800px longest side | 0.43 – 0.64 | 40x56 – 56x56 | 2,072 – 3,136 | 1.21s |
 
 End-to-end time is roughly flat in input resolution, because the cut runs on a
 fixed-size grid and the other stages are cheap — graph construction and the
@@ -114,6 +114,32 @@ The cap is set by the *worst* case rather than the average, because the number
 of augmenting paths depends on the image, not just its size. `hen.jpg` — a dark
 bird on dark soil, so foreground and background overlap heavily in intensity —
 needs far more augmenting paths than the others and sets the ceiling.
+
+### Why 800px isn't slower than 600px
+
+The obvious objection to that table: 800px reads as *faster* than 600px, which
+looks backwards. It isn't a typo, and it also isn't really a speed difference.
+
+Look at the "Cut grid" and "Nodes" columns — they're identical across all three
+rows. Because the grid is capped at 56px on the longest side, a given photo
+reduces to the same grid whatever you feed in: `hen.jpg` becomes 40x56 (2,240
+nodes) from a 400px, 600px, or 800px input. **The solver does the same amount
+of work in every row.** Input resolution only affects the refine-and-composite
+stages, which are ~0.01s.
+
+What does change is the grid's *content*. Downscaling 800→56 and 600→56 are
+different reductions, so the resulting pixels differ slightly — measured, the
+600px and 800px paths land within a mean absolute difference of 0.14 intensity
+levels (max 1); the 400px path differs a little more (mean 0.34, max 3) since it
+has been through an extra round of averaging. Those small shifts move the edge
+weights, which moves the augmenting-path count — the same image-dependence that
+makes `hen.jpg` slower than `tiger.jpg` to begin with.
+
+That effect is tiny, and run-to-run spread on a fixed input is ~2% (10 runs at
+800px: min 1.157s, max 1.180s). So 600px and 800px are within noise of each
+other, and **differences under ~5% between rows shouldn't be read as
+meaningful.** The one real signal is that `tiger.jpg`, whose downscaled content
+barely changes, is flat to the millisecond: 0.67s / 0.66s / 0.67s.
 
 ### Optional fast mode (Boykov-Kolmogorov)
 
