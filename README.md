@@ -32,33 +32,65 @@ grayscale) model would need fewer corrections.
 
 Source photos are from Wikimedia Commons: [dog](https://commons.wikimedia.org/wiki/File:Dog_(Unsplash).jpg) (Multa Media, CC0), [hen](https://commons.wikimedia.org/wiki/File:American_Game_hen.jpg) (Jean Ogden, CC BY 2.0), [horse](https://commons.wikimedia.org/wiki/File:Horse_grazing_in_the_shade_of_conifers_(Unsplash).jpg) (Annie Spratt, CC0), [tiger](https://commons.wikimedia.org/wiki/File:Wet_tiger_(Unsplash).jpg) (佑翔 賴, CC0). Full-size copies are in [`sample_images/`](sample_images/).
 
-## Resolution: why the output isn't downscaled
+## Output quality: what went wrong, and the fix
+
+Earlier versions of this project produced badly pixelated results. Both panels
+below use the *same* photo, the *same* scribbles and the *same* algorithm —
+the only thing that differs is what happens to the mask afterwards:
+
+![Before and after: a blocky 30px cutout beside a full-resolution one](docs/quality_before_after.png)
+
+### The problem
 
 Edmonds-Karp is `O(V * E^2)`, and the number of augmenting paths it needs
 grows with the pixel count — measured on a real photo, solving the cut
 directly takes ~3.4s at 80×80 and ~27s at 150×150. Running it per-pixel on a
-multi-megapixel image is simply not viable.
+multi-megapixel image is not viable, so the image was downscaled to a 30px
+grid before segmenting. That part was unavoidable.
 
-That constraint applies to the **cut**, though, not to the **image**. So the
-pipeline splits the two:
+The mistake was what came next: the cutout was composited **on that 30px grid**
+and the tiny result was then scaled back up for display and download. So the
+output resolution was the *solver's* resolution. You weren't looking at your
+image — you were looking at the solver's working grid, every pixel of it
+blown up ~25×.
 
-1. **Solve coarsely.** The min-cut runs on a 64px grid. An object's *shape*
-   is low-frequency and survives downscaling.
+### The fix
+
+The `O(V * E^2)` constraint applies to the **cut**, not to the **image**, so
+those two are now separated:
+
+1. **Solve coarsely.** The min-cut still runs on a small grid. An object's
+   *shape* is low-frequency and survives downscaling fine.
 2. **Refine at full resolution.** The coarse mask is upsampled and passed
-   through a [guided filter](https://kaiminghe.github.io/eccv10/) with the
-   original full-resolution image as the guide. Where the guide has an edge,
-   the mask boundary snaps onto it — so the boundary regains detail the
-   coarse grid never had.
-3. **Composite at full resolution.** The mask is applied to the original
+   through a [guided filter](https://kaiminghe.github.io/eccv10/) using the
+   full-resolution image as the guide. Where the guide has an edge, the mask
+   boundary snaps onto it — so the boundary recovers detail the coarse grid
+   never contained. This is the step that turns a blocky staircase into a
+   contour that follows fur and grass.
+3. **Composite at full resolution.** The mask is applied to the *original*
    pixels, which are never resampled.
 
-The result is the same resolution as the input, and foreground pixels are
-bit-for-bit the originals (there's a test asserting exactly that). Earlier
-versions returned the 30px solver grid scaled back up, which is why results
-used to look blocky.
+### The supporting changes
 
-`segment_image()` is the entry point that does all of this;
-`segment()` still solves directly at whatever resolution you hand it.
+- **A faster solver, for a finer grid.** Profiling showed BFS was 3.37s of
+  3.43s at 80×80 — inherent to the algorithm, not something tuning fixes. So
+  [`maxflow/grid_maxflow.py`](maxflow/grid_maxflow.py) runs the same algorithm
+  on the pixel grid using numpy arrays instead of a dict probe per edge, plus a
+  vectorised step that saturates all `source → pixel → sink` paths at once.
+  About 5× faster, which pays for a **64px** cut grid instead of 30px.
+- **Scribbles are no longer downscaled on the way in.** They are rasterised at
+  the image's own resolution and reduced with area-averaging that keeps any
+  stroke touching a cell, so thin strokes can't vanish before the solve.
+- **Better compositing.** Backgrounds can be black, dimmed, or a transparent
+  PNG, and downloads come out at the input's resolution.
+
+The result is the same size as the input, and foreground pixels are
+bit-for-bit the originals — [`tests/test_segmentation.py`](tests/test_segmentation.py)
+asserts exactly that, alongside a test that the recovered boundary is tight
+rather than merely non-empty.
+
+`segment_image()` is the entry point that does all of this; `segment()` still
+solves directly at whatever resolution you hand it.
 
 ## Try it in your browser
 

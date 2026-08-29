@@ -479,13 +479,23 @@
     </div>
 
     <p class="section-sub" style="margin-top: 32px;">
-      Synthetic shapes are the easy case. Here's the same function on four
-      real animal photos — the horse comes out clean, the dog/hen/tiger are
-      only partially captured, an honest result of a single grayscale color
-      model rather than a cherry-picked one.
+      Synthetic shapes are the easy case. Here's the same pipeline on four real
+      animal photos, each at its own resolution. The dog and tiger needed one
+      extra scribble apiece — where a subject and its background share a tonal
+      range, a single grayscale colour model can't separate them unaided.
     </p>
     <div class="demo-card">
       <img src="demo_animals.png" alt="Original, scribbles, and segmented result for a dog, hen, horse, and tiger photo">
+    </div>
+
+    <p class="section-sub" style="margin-top: 32px;">
+      Results used to be badly pixelated. Same photo, same scribbles, same
+      algorithm below — the difference is that the mask is now refined and
+      composited at full resolution instead of being solved on a 30px grid and
+      scaled back up.
+    </p>
+    <div class="demo-card">
+      <img src="quality_before_after.png" alt="A blocky 30px cutout beside a full-resolution one">
     </div>
   </div>
 </section>
