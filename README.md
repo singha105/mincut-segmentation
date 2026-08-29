@@ -92,6 +92,85 @@ rather than merely non-empty.
 `segment_image()` is the entry point that does all of this; `segment()` still
 solves directly at whatever resolution you hand it.
 
+## Performance
+
+Measured with [`benchmarks/measure_timing.py`](benchmarks/measure_timing.py)
+(best of 3 runs, Apple Silicon). The **input** resolution is what you pass in
+and get back; the cut grid is the internal working resolution, capped at 56px
+on the longest side.
+
+| Input resolution | Megapixels | Slowest photo |
+| --- | ---: | ---: |
+| 400px longest side | 0.11 – 0.16 | 1.16s |
+| 600px longest side | 0.24 – 0.36 | 1.25s |
+| 800px longest side | 0.43 – 0.64 | 1.23s |
+
+End-to-end time is roughly flat in input resolution, because the cut runs on a
+fixed-size grid and the other stages are cheap — graph construction and the
+full-resolution refinement are ~0.01s each. Practically, **full-resolution
+output is nearly free**; the solve is the whole cost.
+
+The cap is set by the *worst* case rather than the average, because the number
+of augmenting paths depends on the image, not just its size. `hen.jpg` — a dark
+bird on dark soil, so foreground and background overlap heavily in intensity —
+needs far more augmenting paths than the others and sets the ceiling.
+
+### Optional fast mode (Boykov-Kolmogorov)
+
+Edmonds-Karp is the point of this project, so it stays the default. But
+Boykov-Kolmogorov is the max-flow variant built for exactly these vision grid
+graphs, and it is available opt-in via [PyMaxflow](https://github.com/pmneila/PyMaxflow):
+
+```bash
+pip install -r requirements-fast.txt
+```
+
+```python
+segment_image(image, scribbles, fast=True)
+```
+
+[`benchmarks/compare_solvers.py`](benchmarks/compare_solvers.py) runs both on
+identical graphs and checks they agree before reporting any timing — a speed
+number would be meaningless if the answers differed. Results
+([markdown](benchmarks/solver_comparison.md), [CSV](benchmarks/solver_comparison.csv)):
+
+| Image | Cut grid | Nodes | Edmonds-Karp (from scratch) | Boykov-Kolmogorov (PyMaxflow) | Speed-up | Same result |
+| --- | --- | ---: | ---: | ---: | ---: | :---: |
+| dog.jpg | 56x56 | 3,136 | 0.86s | 0.001s | 1116x | yes |
+| hen.jpg | 40x56 | 2,240 | 1.27s | 0.001s | 1312x | yes |
+| horse.jpg | 56x55 | 3,080 | 1.05s | 0.001s | 1028x | yes |
+| tiger.jpg | 37x56 | 2,072 | 0.65s | 0.000s | 1332x | yes |
+| dog.jpg | 96x96 | 9,216 | 2.53s | 0.002s | 1337x | yes |
+| hen.jpg | 69x96 | 6,624 | 9.66s | 0.005s | 2038x | yes |
+| horse.jpg | 96x95 | 9,120 | 2.72s | 0.002s | 1333x | yes |
+| tiger.jpg | 64x96 | 6,144 | 4.12s | 0.002s | 1812x | yes |
+| dog.jpg | 160x160 | 25,600 | not run | 0.007s | — | — |
+| hen.jpg | 114x160 | 18,240 | not run | 0.013s | — | — |
+| horse.jpg | 160x158 | 25,280 | not run | 0.007s | — | — |
+| tiger.jpg | 106x160 | 16,960 | not run | 0.007s | — | — |
+
+Roughly a **1000–2000× speed-up on the solve**, with identical masks in every
+case compared. Above a 96px grid the from-scratch solver takes long enough that
+timing every image isn't worth the wall time, so it's marked "not run".
+
+What that buys end-to-end:
+
+| Mode | Cut grid cap | Slowest photo |
+| --- | ---: | ---: |
+| Edmonds-Karp (default) | 56px | 1.23s |
+| Boykov-Kolmogorov | 56px | 0.01s |
+| Boykov-Kolmogorov | 256px | 0.05s |
+| Boykov-Kolmogorov | 400px | 0.08s |
+
+So fast mode can run a **7× finer cut grid in 1/15th the time** of the default
+— which is the real benefit: less reliance on the refinement pass to recover
+boundary detail, because the cut itself is far closer to full resolution.
+
+PyMaxflow's import name is `maxflow`, the same as this project's own package,
+so from the repo root ours shadows it.
+[`maxflow/fast_maxflow.py`](maxflow/fast_maxflow.py) loads it explicitly from
+site-packages to work around that.
+
 ## Try it in your browser
 
 The [live page](https://singha105.github.io/mincut-segmentation/) is a fully
@@ -182,9 +261,10 @@ to the reference on randomised graphs.
 
 ## Project layout
 
-- `maxflow/` — the reference Edmonds-Karp solver, the fast grid solver, and image-to-graph construction
+- `maxflow/` — the reference Edmonds-Karp solver, the fast grid solver, the optional Boykov-Kolmogorov path, and image-to-graph construction
 - `segmentation/` — orchestration: coarse cut → full-resolution refinement → mask and compositing
 - `app.py` — Streamlit UI for marking foreground/background and viewing results
 - `sample_images/` — synthetic shapes for manual testing, plus four real (CC0/CC-BY) animal photos for a harder real-world demo
 - `tests/` — automated tests
+- `benchmarks/` — timing harness, the Edmonds-Karp vs Boykov-Kolmogorov comparison, and its saved results
 - `docs/` — the [GitHub Pages site](https://singha105.github.io/mincut-segmentation/): `index.html`/`segmentation.js` (a client-side JS port with upload/scribble/segment/download) and `demo.png`/`demo_animals.png` (the static demo images)
