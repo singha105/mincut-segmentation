@@ -67,6 +67,40 @@ def _estimate_beta(gray: np.ndarray) -> float:
     return 1.0 / (2.0 * mean_sq_diff)
 
 
+def _n_link_capacities(gray: np.ndarray, n_link_weight: float) -> Tuple[np.ndarray, np.ndarray]:
+    """Return the (east, south) N-link weight arrays for `gray`.
+
+    ``east[y, x]`` is the weight of the undirected link between ``(y, x)`` and
+    ``(y, x+1)``; ``south[y, x]`` links ``(y, x)`` to ``(y+1, x)``. The last
+    column of ``east`` and last row of ``south`` are zero (no such neighbour).
+
+    This is the single source of truth for N-link weights -- both the dict
+    graph and the grid solver's capacity arrays are derived from it, so the
+    two representations cannot drift apart.
+    """
+    beta = _estimate_beta(gray)
+
+    east = np.zeros_like(gray)
+    horizontal_diff = gray[:, 1:] - gray[:, :-1]
+    east[:, :-1] = n_link_weight * np.exp(-beta * horizontal_diff ** 2)
+
+    south = np.zeros_like(gray)
+    vertical_diff = gray[1:, :] - gray[:-1, :]
+    south[:-1, :] = n_link_weight * np.exp(-beta * vertical_diff ** 2)
+
+    return east, south
+
+
+def _neighbor_weight_sum(east: np.ndarray, south: np.ndarray) -> np.ndarray:
+    """Total N-link weight incident on each pixel (used to size the K constant)."""
+    total = np.zeros_like(east)
+    total[:, :-1] += east[:, :-1]  # link to the east
+    total[:, 1:] += east[:, :-1]  # same link, seen from the western pixel
+    total[:-1, :] += south[:-1, :]
+    total[1:, :] += south[:-1, :]
+    return total
+
+
 def _build_n_links(gray: np.ndarray, n_link_weight: float) -> Tuple[Graph, np.ndarray]:
     """Build symmetric pixel-to-pixel edges weighted by color similarity.
 
@@ -74,28 +108,21 @@ def _build_n_links(gray: np.ndarray, n_link_weight: float) -> Tuple[Graph, np.nd
     outgoing N-link weight, which later sizes the hard-constraint constant K.
     """
     height, width = gray.shape
-    beta = _estimate_beta(gray)
+    east, south = _n_link_capacities(gray, n_link_weight)
     graph: Graph = {}
-    neighbor_weight_sum = np.zeros((height, width), dtype=np.float64)
-
-    def add_edge(p: Node, q: Node, weight: float) -> None:
-        graph.setdefault(p, {})[q] = weight
-        graph.setdefault(q, {})[p] = weight
-        neighbor_weight_sum[p] += weight
-        neighbor_weight_sum[q] += weight
 
     for row in range(height):
         for col in range(width):
             if col + 1 < width:
-                diff = gray[row, col] - gray[row, col + 1]
-                weight = n_link_weight * np.exp(-beta * diff ** 2)
-                add_edge((row, col), (row, col + 1), weight)
+                weight = east[row, col]
+                graph.setdefault((row, col), {})[(row, col + 1)] = weight
+                graph.setdefault((row, col + 1), {})[(row, col)] = weight
             if row + 1 < height:
-                diff = gray[row, col] - gray[row + 1, col]
-                weight = n_link_weight * np.exp(-beta * diff ** 2)
-                add_edge((row, col), (row + 1, col), weight)
+                weight = south[row, col]
+                graph.setdefault((row, col), {})[(row + 1, col)] = weight
+                graph.setdefault((row + 1, col), {})[(row, col)] = weight
 
-    return graph, neighbor_weight_sum
+    return graph, _neighbor_weight_sum(east, south)
 
 
 def _color_histogram(gray: np.ndarray, mask: np.ndarray, num_bins: int) -> np.ndarray:
@@ -110,6 +137,65 @@ def _bin_indices(gray: np.ndarray, num_bins: int) -> np.ndarray:
     """Map each pixel's intensity to its histogram bin index."""
     bin_width = 256.0 / num_bins
     return np.clip((gray // bin_width).astype(int), 0, num_bins - 1)
+
+
+def _t_link_capacities(
+    gray: np.ndarray,
+    scribble_mask: np.ndarray,
+    hard_constraint: float,
+    num_bins: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return the (source, sink) t-link capacity arrays.
+
+    Scribbled pixels get the hard-constraint capacity K on one side and 0 on
+    the other, so the min-cut can never relabel them. Everything else is
+    scored by how well it matches each scribble's intensity histogram.
+    """
+    fg_mask = scribble_mask == FOREGROUND
+    bg_mask = scribble_mask == BACKGROUND
+    if not fg_mask.any() or not bg_mask.any():
+        raise ValueError(
+            "scribble_mask must contain at least one FOREGROUND and one BACKGROUND pixel"
+        )
+
+    fg_histogram = _color_histogram(gray, fg_mask, num_bins)
+    bg_histogram = _color_histogram(gray, bg_mask, num_bins)
+    bin_indices = _bin_indices(gray, num_bins)
+
+    # Regional cost of a label is low when the pixel resembles the *other*
+    # label's model -- see the module docstring.
+    source_capacity = -np.log(bg_histogram[bin_indices])
+    sink_capacity = -np.log(fg_histogram[bin_indices])
+
+    source_capacity[fg_mask] = hard_constraint
+    sink_capacity[fg_mask] = 0.0
+    source_capacity[bg_mask] = 0.0
+    sink_capacity[bg_mask] = hard_constraint
+
+    return source_capacity, sink_capacity
+
+
+def build_grid_capacities(
+    image: np.ndarray,
+    scribble_mask: np.ndarray,
+    n_link_weight: float = 50.0,
+    num_bins: int = 32,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Build the same Boykov-Jolly graph as `build_graph`, as capacity arrays.
+
+    Returns ``(source, sink, east, south)``, all shaped ``(H, W)`` -- the
+    layout ``maxflow.grid_maxflow.solve_grid_min_cut`` expects. This is the
+    fast path used for real segmentation; `build_graph` builds the equivalent
+    nested-dict graph for the reference solver.
+    """
+    gray = _to_grayscale(image)
+    east, south = _n_link_capacities(gray, n_link_weight)
+
+    # K must exceed any possible sum of N-link weights at a single pixel, so
+    # a hard-constrained pixel's t-link is never the cheapest thing to cut.
+    hard_constraint = 1.0 + _neighbor_weight_sum(east, south).max()
+    source, sink = _t_link_capacities(gray, scribble_mask, hard_constraint, num_bins)
+    return source, sink, east, south
 
 
 def build_graph(
@@ -129,41 +215,19 @@ def build_graph(
 
     graph, neighbor_weight_sum = _build_n_links(gray, n_link_weight)
 
-    fg_mask = scribble_mask == FOREGROUND
-    bg_mask = scribble_mask == BACKGROUND
-    if not fg_mask.any() or not bg_mask.any():
-        raise ValueError(
-            "scribble_mask must contain at least one FOREGROUND and one BACKGROUND pixel"
-        )
-
-    fg_histogram = _color_histogram(gray, fg_mask, num_bins)
-    bg_histogram = _color_histogram(gray, bg_mask, num_bins)
-    bin_indices = _bin_indices(gray, num_bins)
-
     # K must exceed any possible sum of N-link weights at a single pixel, so
     # a hard-constrained pixel's t-link is never the cheapest thing to cut.
     hard_constraint = 1.0 + neighbor_weight_sum.max()
+    source_capacities, sink_capacities = _t_link_capacities(
+        gray, scribble_mask, hard_constraint, num_bins
+    )
 
     graph.setdefault(SOURCE, {})
     for row in range(height):
         for col in range(width):
             pixel: Node = (row, col)
-            label = scribble_mask[row, col]
-
-            if label == FOREGROUND:
-                source_capacity = hard_constraint
-                sink_capacity = 0.0
-            elif label == BACKGROUND:
-                source_capacity = 0.0
-                sink_capacity = hard_constraint
-            else:
-                bin_idx = bin_indices[row, col]
-                prob_bg = bg_histogram[bin_idx]
-                prob_fg = fg_histogram[bin_idx]
-                # Regional cost of a label is low when the pixel resembles
-                # the *other* label's model -- see the module docstring.
-                source_capacity = -np.log(prob_bg)
-                sink_capacity = -np.log(prob_fg)
+            source_capacity = source_capacities[row, col]
+            sink_capacity = sink_capacities[row, col]
 
             if source_capacity > 0:
                 graph[SOURCE][pixel] = source_capacity

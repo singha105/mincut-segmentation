@@ -358,9 +358,18 @@
     height: auto;
     border-radius: 10px;
     border: 1px solid var(--card-border);
-    image-rendering: pixelated;
     cursor: crosshair;
     touch-action: none;
+  }
+
+  #backgroundStyle {
+    background: var(--bg-alt);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    border-radius: 7px;
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
   }
 
   .try-actions {
@@ -407,7 +416,6 @@
     width: 100%;
     border-radius: 8px;
     border: 1px solid var(--card-border);
-    image-rendering: pixelated;
   }
 
   .result-caption {
@@ -504,7 +512,15 @@
           </div>
           <label class="brush-label">
             Brush size
-            <input type="range" id="brushSize" min="1" max="25" value="6">
+            <input type="range" id="brushSize" min="1" max="40" value="10">
+          </label>
+          <label class="brush-label">
+            Background
+            <select id="backgroundStyle">
+              <option value="black">Black</option>
+              <option value="dim">Dimmed</option>
+              <option value="transparent">Transparent</option>
+            </select>
           </label>
           <button class="btn secondary" id="clearScribblesBtn" type="button">Clear scribbles</button>
         </div>
@@ -631,6 +647,8 @@ streamlit run app.py</div></div>
   </div>
 </footer>
 
-<script src="segmentation.js"></script>
+<!-- ?v= is bumped whenever segmentation.js changes so browsers don't serve a
+     stale cached copy of the solver. -->
+<script src="segmentation.js?v=2"></script>
 </body>
 </html>
