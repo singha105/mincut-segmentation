@@ -67,16 +67,26 @@ def segment(
     scribble_mask: np.ndarray,
     n_link_weight: float = 50.0,
     num_bins: int = 32,
+    fast: bool = False,
 ) -> np.ndarray:
     """Segment `image` into foreground/background given `scribble_mask`.
 
     Solves the min-cut at the resolution it is given and returns a boolean
     ``(H, W)`` mask that is True on the source side of the cut (foreground).
+
+    Set `fast=True` to solve with Boykov-Kolmogorov via PyMaxflow instead of
+    the from-scratch Edmonds-Karp solver. Same min-cut, much faster on large
+    grids; requires ``pip install -r requirements-fast.txt``.
     """
-    source, sink, east, south = build_grid_capacities(
+    capacities = build_grid_capacities(
         image, scribble_mask, n_link_weight=n_link_weight, num_bins=num_bins
     )
-    _, mask = solve_grid_min_cut(source, sink, east, south)
+    if fast:
+        from maxflow.fast_maxflow import solve_grid_min_cut_fast
+
+        _, mask = solve_grid_min_cut_fast(*capacities)
+    else:
+        _, mask = solve_grid_min_cut(*capacities)
     return mask
 
 
@@ -172,6 +182,7 @@ def segment_image(
     processing_max_dim: int = DEFAULT_PROCESSING_MAX_DIM,
     n_link_weight: float = 50.0,
     num_bins: int = 32,
+    fast: bool = False,
 ) -> np.ndarray:
     """Segment a full-resolution image, returning a full-resolution mask.
 
@@ -182,6 +193,9 @@ def segment_image(
 
     Returns a boolean ``(H, W)`` mask -- the same size as `image` -- so a
     cutout made from it loses none of the input's resolution.
+
+    `fast=True` swaps the from-scratch solver for Boykov-Kolmogorov via
+    PyMaxflow, which makes a much larger `processing_max_dim` practical.
     """
     gray_full = _to_grayscale(image)
     height, width = gray_full.shape
@@ -190,12 +204,12 @@ def segment_image(
 
     # Already small enough to cut directly; no refinement step needed.
     if (proc_height, proc_width) == (height, width):
-        return segment(image, scribble_mask, n_link_weight, num_bins)
+        return segment(image, scribble_mask, n_link_weight, num_bins, fast=fast)
 
     small_image = cv2.resize(image, (proc_width, proc_height), interpolation=cv2.INTER_AREA)
     small_scribbles = _downscale_scribbles(scribble_mask, proc_height, proc_width)
 
-    mask_small = segment(small_image, small_scribbles, n_link_weight, num_bins)
+    mask_small = segment(small_image, small_scribbles, n_link_weight, num_bins, fast=fast)
 
     upscale_factor = max(height / proc_height, width / proc_width)
     return _refine_to_full_resolution(mask_small, gray_full, scribble_mask, upscale_factor)

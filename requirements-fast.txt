@@ -1,0 +1,10 @@
+# Optional: enables `fast=True` (Boykov-Kolmogorov) in segmentation.segmenter.
+# The project runs fine without this -- the from-scratch Edmonds-Karp solver is
+# the default. Install alongside requirements.txt:
+#
+#     pip install -r requirements-fast.txt
+#
+# Note: PyMaxflow's import name is `maxflow`, the same as this project's own
+# package. maxflow/fast_maxflow.py loads it explicitly from site-packages to
+# work around that; see the module docstring.
+PyMaxflow
