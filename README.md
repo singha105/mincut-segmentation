@@ -12,6 +12,27 @@ pixels in, a foreground/background mask out:
 
 ![Demo: original, scribbles, and segmented result for each sample image](docs/demo.png)
 
+## Real-world examples
+
+The synthetic shapes above are the easy case — clean solid colors, sharp
+edges. Real photos are a genuinely harder test: textured fur, uneven
+lighting, and backgrounds that share colors with the subject. Here's the
+same `segment()` function, unmodified, run on four real animal photos:
+
+![Demo: original, scribbles, and segmented result for a dog, hen, horse, and tiger photo](docs/demo_animals.png)
+
+The horse comes out cleanly. The dog, hen, and tiger are only partially
+captured — an honest result, not a cherry-picked one. This algorithm's
+foreground/background model is a single grayscale intensity histogram per
+region (see [How it works](#how-it-works-edmonds-karp-max-flow)), so when
+the subject's fur tone overlaps with part of the background's tonal range
+(a tiger's shadowed stripes vs. dark water, a dark hen vs. dark dirt), a
+couple of scribbles won't fully disambiguate it. More scribbles in the
+confused regions — exactly what the [interactive
+tool](#try-it-in-your-browser) is for — would tighten these up.
+
+Source photos are from Wikimedia Commons: [dog](https://commons.wikimedia.org/wiki/File:Dog_(Unsplash).jpg) (Multa Media, CC0), [hen](https://commons.wikimedia.org/wiki/File:American_Game_hen.jpg) (Jean Ogden, CC BY 2.0), [horse](https://commons.wikimedia.org/wiki/File:Horse_grazing_in_the_shade_of_conifers_(Unsplash).jpg) (Annie Spratt, CC0), [tiger](https://commons.wikimedia.org/wiki/File:Wet_tiger_(Unsplash).jpg) (佑翔 賴, CC0). Full-size copies are in [`sample_images/`](sample_images/).
+
 ## Try it in your browser
 
 The [live page](https://singha105.github.io/mincut-segmentation/) is a fully
@@ -85,6 +106,6 @@ iterations.
 - `maxflow/` — Edmonds-Karp max-flow implementation and image-to-graph construction
 - `segmentation/` — orchestration layer that turns a graph min-cut into a foreground/background mask
 - `app.py` — Streamlit UI for marking foreground/background and viewing results
-- `sample_images/` — small synthetic images for manual testing and demos
+- `sample_images/` — synthetic shapes for manual testing, plus four real (CC0/CC-BY) animal photos for a harder real-world demo
 - `tests/` — automated tests
-- `docs/` — the [GitHub Pages site](https://singha105.github.io/mincut-segmentation/): `index.html`/`segmentation.js` (a client-side JS port with upload/scribble/segment/download) and `demo.png` (the static demo image)
+- `docs/` — the [GitHub Pages site](https://singha105.github.io/mincut-segmentation/): `index.html`/`segmentation.js` (a client-side JS port with upload/scribble/segment/download) and `demo.png`/`demo_animals.png` (the static demo images)
