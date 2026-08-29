@@ -50,7 +50,16 @@ from maxflow.grid_maxflow import solve_grid_min_cut
 # Longest side of the grid the min-cut is actually solved on. Chosen from
 # measured solver cost (see the module docstring): large enough to capture
 # object shape, small enough to stay interactive.
-DEFAULT_PROCESSING_MAX_DIM = 64
+#
+# The number of augmenting paths depends on the image, not just its size, so
+# this is set by the *worst* case rather than the average. benchmarks/ measures
+# hen.jpg -- a dark bird on dark soil, so foreground and background overlap
+# heavily in intensity -- at ~2.5s on a 64px grid but ~1.3s at 56px, while the
+# easier photos sit near 0.8s. 56 keeps the slowest case comfortably inside the
+# 2s budget. Refinement restores boundary detail afterwards, so the cost of the
+# smaller grid is much lower than it sounds; PROCESSING_MAX_DIM can be raised
+# per call, and `fast` mode (Boykov-Kolmogorov) makes much larger grids viable.
+DEFAULT_PROCESSING_MAX_DIM = 56
 
 
 def segment(
