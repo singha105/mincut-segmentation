@@ -174,6 +174,11 @@ comes from [pillow-heif](https://github.com/bigcat88/pillow_heif), which is in
 cameras record orientation in metadata instead of rotating the pixels, and
 without that a photo shot sideways would be segmented sideways.
 
+HEIC here works in **any browser, Chrome included**, because the browser never
+decodes it. The file is uploaded as raw bytes, Python decodes it, and only PNG
+comes back. That is not true of the hosted web page, where decoding is the
+browser's job; see [The web page](#the-web-page).
+
 ### From the command line
 
 No UI needed. Scribbles are given either as rectangles or as a red/blue scribble
@@ -398,11 +403,22 @@ To work on it locally, serve the folder and open it:
 python -m http.server 8000 --directory web
 ```
 
-One thing the browser version cannot match: **HEIC**. Decoding it there depends
-on the browser rather than on this project, and only Safari does it. Chrome and
-Firefox will refuse an iPhone photo, and the page says so instead of pretending
-the file is broken. The desktop app has no such limit, because it decodes HEIC
-itself through pillow-heif.
+One thing the browser version cannot match: **HEIC**. Everything here runs
+client-side, so decoding is up to the browser, and only Safari supports HEIC.
+Chrome and Firefox refuse an iPhone photo, and the page says exactly that
+rather than implying the file is broken.
+
+To be clear about which is which:
+
+| | HEIC in Chrome | HEIC in Safari |
+| --- | :---: | :---: |
+| Desktop app (`streamlit run app.py`) | works | works |
+| Hosted web page | no | works |
+
+The app works everywhere because Python decodes the file and the browser only
+ever receives PNG. The hosted page has no server to lean on. Adding a
+WebAssembly HEIC decoder to the page would close the gap, at the cost of a
+1 to 2 MB download.
 
 Another wrinkle: the page loads its images from `assets/`, which sits outside `web/`
 so the README can share them. The
