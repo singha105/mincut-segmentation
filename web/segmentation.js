@@ -459,6 +459,10 @@
     strokeCtx.stroke();
   }
 
+  function looksLikeHeif(name) {
+    return /\.(heic|heif|hif)$/i.test(name || "");
+  }
+
   function loadImageFile(file) {
     const img = new Image();
     img.onload = () => {
@@ -490,7 +494,20 @@
       setStatus(`Loaded ${fullWidth}x${fullHeight}. Results keep this resolution.`, false);
       URL.revokeObjectURL(img.src);
     };
-    img.onerror = () => setStatus("Couldn't load that file as an image.", true);
+    img.onerror = () => {
+      // Safari decodes HEIC; Chrome and Firefox do not, so an iPhone photo
+      // fails here through no fault of the file. Say so plainly instead of
+      // implying the image is broken.
+      if (looksLikeHeif(file.name)) {
+        setStatus(
+          "This browser can't decode HEIC/HEIF images. Safari can, or run the " +
+            "desktop app from the repo, which reads HEIC directly.",
+          true
+        );
+      } else {
+        setStatus("Couldn't load that file as an image.", true);
+      }
+    };
     img.src = URL.createObjectURL(file);
   }
 

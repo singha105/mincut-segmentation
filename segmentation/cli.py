@@ -3,6 +3,8 @@
 Scribbles can be given either as rectangles on the command line, or as a
 scribble image using the same red/blue convention the app uses.
 
+Reads anything Pillow can open, HEIC/HEIF included.
+
     python -m segmentation.cli sample_images/horse.jpg out.png \\
         --fg 350,300,250,20 --bg 60,40,340,20 --bg 100,740,500,20
 
@@ -18,6 +20,7 @@ import time
 import numpy as np
 from PIL import Image
 
+from image_io import open_image
 from maxflow.graph_builder import BACKGROUND, FOREGROUND, UNMARKED
 from segmentation.segmenter import (
     DEFAULT_PROCESSING_MAX_DIM,
@@ -55,7 +58,7 @@ def paint_rectangles(scribbles, rectangles, label):
 
 def scribbles_from_image(path, shape):
     """Read a red/blue scribble image into a label mask."""
-    strokes = Image.open(path).convert("RGB")
+    strokes = open_image(path)
     if strokes.size != (shape[1], shape[0]):
         strokes = strokes.resize((shape[1], shape[0]), Image.Resampling.NEAREST)
     pixels = np.asarray(strokes).astype(int)
@@ -118,7 +121,11 @@ def main(argv=None):
             "need scribbles: pass --scribbles, or at least one --fg and one --bg rectangle"
         )
 
-    image = np.asarray(Image.open(args.input).convert("RGB"))
+    try:
+        image = np.asarray(open_image(args.input))
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
     shape = image.shape[:2]
 
     if args.scribbles:

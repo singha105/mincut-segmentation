@@ -167,6 +167,13 @@ or **Background (blue)**, scribble on the canvas, hit **Segment**. The backgroun
 can be rendered black, dimmed, or transparent, and the download comes out at
 your image's original resolution.
 
+**Formats:** PNG, JPEG, and **HEIC/HEIF**, so photos straight off an iPhone
+work with no converting first. Pillow cannot decode HEIC by itself, so that
+comes from [pillow-heif](https://github.com/bigcat88/pillow_heif), which is in
+`requirements.txt`. EXIF rotation is applied on load as well, since phone
+cameras record orientation in metadata instead of rotating the pixels, and
+without that a photo shot sideways would be segmented sideways.
+
 ### From the command line
 
 No UI needed. Scribbles are given either as rectangles or as a red/blue scribble
@@ -347,6 +354,7 @@ leans less on the refinement pass to recover boundary detail.
 mincut-segmentation/
 ├── app.py                       Streamlit UI (upload, scribble, segment, download)
 ├── canvas_utils.py              turns canvas strokes into a label mask
+├── image_io.py                  image loading, HEIC/HEIF and EXIF rotation
 ├── Makefile                     run / test / bench / screenshots / demo targets
 ├── maxflow/
 │   ├── graph_builder.py         image + scribbles into a Boykov-Jolly graph
@@ -390,7 +398,13 @@ To work on it locally, serve the folder and open it:
 python -m http.server 8000 --directory web
 ```
 
-One wrinkle: the page loads its images from `assets/`, which sits outside `web/`
+One thing the browser version cannot match: **HEIC**. Decoding it there depends
+on the browser rather than on this project, and only Safari does it. Chrome and
+Firefox will refuse an iPhone photo, and the page says so instead of pretending
+the file is broken. The desktop app has no such limit, because it decodes HEIC
+itself through pillow-heif.
+
+Another wrinkle: the page loads its images from `assets/`, which sits outside `web/`
 so the README can share them. The
 [Pages workflow](.github/workflows/pages.yml) copies both into the published
 site. If you are serving `web/` directly and the demo images 404, that is why;
@@ -402,7 +416,7 @@ symlink or copy `assets/` into `web/` while you work.
 pytest
 ```
 
-70 tests, covering:
+87 tests, covering:
 
 - **Hand-verified max-flow.** Small graphs with known answers, including one
   that needs several augmenting-path iterations
@@ -420,13 +434,15 @@ pytest
   ([`test_canvas_utils.py`](tests/test_canvas_utils.py))
 - **The CLI.** Argument parsing, clipping, end-to-end output
   ([`test_cli.py`](tests/test_cli.py))
+- **Image loading.** HEIC/HEIF decoding and EXIF rotation
+  ([`test_image_io.py`](tests/test_image_io.py))
 - **The app.** Bad uploads reported rather than crashing
   ([`test_app_upload.py`](tests/test_app_upload.py)), plus import and helper
   smoke tests ([`test_app_smoke.py`](tests/test_app_smoke.py))
 
-CI runs the suite twice: once without PyMaxflow, where 60 pass and 10 skip,
+CI runs the suite twice: once without PyMaxflow, where 77 pass and 10 skip,
 which proves the project works without the optional dependency, and once with
-it, where all 70 run.
+it, where all 87 run.
 
 To regenerate the screenshots and demo GIF:
 

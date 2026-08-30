@@ -11,6 +11,7 @@ from streamlit import runtime
 from streamlit_drawable_canvas import st_canvas
 
 from canvas_utils import BACKGROUND_COLOR, FOREGROUND_COLOR, rasterize_scribbles
+from image_io import UPLOAD_TYPES, heif_available, open_image
 from segmentation.segmenter import DEFAULT_PROCESSING_MAX_DIM, apply_mask, segment_image
 
 # streamlit-drawable-canvas 0.9.3 calls the private st_image.image_to_url(),
@@ -51,16 +52,13 @@ def load_uploaded_image(uploaded_file):
 
     The file picker filters by extension, which says nothing about the bytes:
     a truncated download or a renamed non-image still reaches us and used to
-    surface as a raw traceback. Pillow is also lazy, so the failure often
-    lands on first pixel access rather than on open() -- load() forces it here,
-    where it can be reported properly.
+    surface as a raw traceback. image_io.open_image forces the decode (Pillow
+    is lazy), handles HEIC, and applies EXIF rotation.
     """
     try:
-        image = Image.open(uploaded_file)
-        image.load()
-        return image.convert("RGB"), None
-    except (OSError, ValueError, Image.DecompressionBombError) as error:
-        return None, f"Couldn't read that file as an image ({type(error).__name__}: {error})."
+        return open_image(uploaded_file, name=getattr(uploaded_file, "name", None)), None
+    except ValueError as error:
+        return None, str(error)
 
 
 st.title("Mincut Segmentation")
@@ -69,7 +67,13 @@ st.write(
     "then click Segment."
 )
 
-uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload an image", type=UPLOAD_TYPES)
+
+if not heif_available():
+    st.caption(
+        "HEIC/HEIF uploads are unavailable because pillow-heif is not installed. "
+        "Run: pip install -r requirements.txt"
+    )
 
 original_image, load_error = (None, None)
 if uploaded_file is not None:
