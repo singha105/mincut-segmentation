@@ -9,18 +9,38 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The project must work without the optional solver, so that path is
+          # tested on its own; the fast-mode tests skip there.
+          - name: default (Edmonds-Karp only)
+            fast: false
+          # ...and with it, so the fast-mode equivalence tests actually run
+          # rather than silently skipping on every push.
+          - name: with PyMaxflow fast mode
+            fast: true
+
+    name: ${{ matrix.name }}
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install optional fast-mode solver
+        if: matrix.fast
+        run: pip install -r requirements-fast.txt
+
       - name: Run tests
-        run: pytest
+        run: pytest -v
