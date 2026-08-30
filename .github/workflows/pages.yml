@@ -37,6 +37,34 @@ jobs:
           echo "--- files to publish ---"
           find _site -type f | sort
 
+      # index.html and the images it needs live in different folders, so a
+      # rename can break the published page while everything still looks fine
+      # in the repo. Fail the build instead of shipping a page with holes.
+      - name: Check every local reference resolves
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          site = pathlib.Path("_site")
+          html = (site / "index.html").read_text()
+
+          refs = set()
+          for ref in re.findall(r'(?:src|href)="([^"#:]+)"', html):
+              # segmentation.js carries a ?v= cache-buster; the file on disk
+              # has no query string, so strip it before looking.
+              path = ref.split("?", 1)[0].lstrip("/")
+              if path:
+                  refs.add(path)
+
+          missing = sorted(r for r in refs if not (site / r).exists())
+          for ref in sorted(refs):
+              print(("  ok      " if ref not in missing else "  MISSING ") + ref)
+          if missing:
+              print(f"\n{len(missing)} reference(s) missing from the built site")
+              sys.exit(1)
+          print(f"\nall {len(refs)} local references resolve")
+          PY
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
