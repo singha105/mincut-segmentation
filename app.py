@@ -86,7 +86,7 @@ if original_image is not None:
     st.caption(
         f"Image is {original_image.width}x{original_image.height}. The min-cut is "
         f"solved on a {DEFAULT_PROCESSING_MAX_DIM}px grid for speed, then the mask is "
-        "refined back to full resolution — your result is not downscaled."
+        "refined back to full resolution, so your result is not downscaled."
     )
 
     scribble_mode = st.radio(
@@ -169,8 +169,8 @@ if original_image is not None:
                 st.image(result, caption="Segmented result")
 
             st.write(
-                f"Segmentation took {elapsed_seconds:.2f} seconds — "
-                f"result is {result.shape[1]}x{result.shape[0]}, "
+                f"Segmentation took {elapsed_seconds:.2f} seconds. "
+                f"Result is {result.shape[1]}x{result.shape[0]}, "
                 "the same resolution as the upload."
             )
 

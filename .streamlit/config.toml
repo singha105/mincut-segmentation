@@ -1,0 +1,12 @@
+# Pin the app to the same dark palette as the web page in web/, so the two
+# look like one project. Without this Streamlit follows the viewer's OS theme,
+# which is why the app used to render light for some people and dark for others.
+[theme]
+base = "dark"
+primaryColor = "#ef4444"
+backgroundColor = "#0b0c0f"
+secondaryBackgroundColor = "#15171c"
+textColor = "#e8e9eb"
+
+[browser]
+gatherUsageStats = false

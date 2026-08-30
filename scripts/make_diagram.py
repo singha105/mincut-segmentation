@@ -1,4 +1,4 @@
-"""Generate docs/how-it-works.png, the graph diagram used in the README.
+"""Generate assets/how-it-works.png, the graph diagram used in the README.
 
 Draws the Boykov-Jolly construction: a pixel grid wired to two terminals,
 with N-links between neighbours, T-links to the terminals, and the min-cut
@@ -12,7 +12,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_PATH = os.path.join(REPO_ROOT, "docs", "how-it-works.png")
+OUT_PATH = os.path.join(REPO_ROOT, "assets", "how-it-works.png")
 
 SCALE = 2  # render at 2x then downsample, so the lines come out smooth
 W, H = 900 * SCALE, 600 * SCALE

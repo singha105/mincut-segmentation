@@ -119,8 +119,8 @@ def main():
     ]
     for row in rows:
         ek = f"{row['edmonds_karp_s']:.2f}s" if row["edmonds_karp_s"] is not None else "not run"
-        speedup = f"{row['speedup']:.0f}x" if row["speedup"] is not None else "—"
-        same = "yes" if row["same_result"] else ("—" if row["same_result"] is None else "NO")
+        speedup = f"{row['speedup']:.0f}x" if row["speedup"] is not None else "n/a"
+        same = "yes" if row["same_result"] else ("n/a" if row["same_result"] is None else "NO")
         lines.append(
             f"| {row['image']} | {row['grid']} | {row['nodes']:,} | {ek} "
             f"| {row['boykov_kolmogorov_s']:.3f}s | {speedup} | {same} |"

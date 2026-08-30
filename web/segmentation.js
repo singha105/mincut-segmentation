@@ -665,7 +665,7 @@
         renderResult();
         tryResults.hidden = false;
         setStatus(
-          `Segmented in ${elapsed.toFixed(2)}s — result is ${fullWidth}x${fullHeight}, ` +
+          `Segmented in ${elapsed.toFixed(2)}s. Result is ${fullWidth}x${fullHeight}, ` +
             "same as the upload.",
           false
         );

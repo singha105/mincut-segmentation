@@ -1,0 +1,52 @@
+name: Deploy web page
+
+# The site lives in web/ so its source is easy to find. GitHub Pages can only
+# branch-deploy from the repo root or /docs, so it is published from Actions
+# instead, which also lets the shared images in assets/ come along.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "assets/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r web/. _site/
+          mkdir -p _site/assets
+          cp -r assets/. _site/assets/
+          echo "--- files to publish ---"
+          find _site -type f | sort
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

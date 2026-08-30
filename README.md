@@ -8,114 +8,113 @@ Built an interactive image segmentation tool using max-flow/min-cut graph algori
 
 ![Demo: uploading a photo, scribbling foreground and background, and segmenting it](screenshots/demo.gif)
 
-**[Try it live in your browser →](https://singha105.github.io/mincut-segmentation/)**
-&nbsp;·&nbsp; no install needed
+**[Try it live in your browser](https://singha105.github.io/mincut-segmentation/)** (nothing to install)
 
-Scribble red over what you want to keep and blue over what you don't. A
-max-flow/min-cut solve — Edmonds-Karp, written from scratch — turns those few
-marked pixels into a full-resolution cutout.
-
----
+You scribble red over the thing you want to keep and blue over the stuff you
+don't. From those few marked pixels it works out the whole boundary, and hands
+back a cutout at the resolution you gave it. The max-flow solver underneath is
+Edmonds-Karp, written from scratch rather than pulled from a library.
 
 ## Contents
 
 - [How it works](#how-it-works)
 - [Screenshots](#screenshots)
-- [Install & usage](#install--usage)
+- [Install and usage](#install-and-usage)
 - [Performance](#performance)
 - [Project structure](#project-structure)
+- [The web page](#the-web-page)
 - [Running the tests](#running-the-tests)
 - [License](#license)
 
----
-
 ## How it works
 
-Segmentation is posed as a **min-cut** problem, following the
+Segmentation is set up as a **min-cut** problem, following the
 [Boykov-Jolly](https://www.csd.uwo.ca/~yboykov/Papers/iccv01.pdf) formulation.
 Every pixel becomes a node in a graph strung between two terminals: a **source**
-`S` meaning *foreground*, and a **sink** `T` meaning *background*.
+`S` meaning foreground, and a **sink** `T` meaning background.
 
-![Diagram: pixels as graph nodes between a source and sink terminal, with N-links and T-links, cut along the weak edge](docs/how-it-works.png)
+![Diagram: pixels as graph nodes between a source and sink terminal, with N-links and T-links, cut along the weak edge](assets/how-it-works.png)
 
-Two kinds of edge get built:
+There are two kinds of edge.
 
-**N-links** connect each pixel to its 4 neighbours. The weight is high when the
-two pixels look alike and low where their intensities differ:
+**N-links** join each pixel to its four neighbours. The weight is high when the
+two pixels look alike, low where their intensities differ:
 
 ```
 weight(p, q) = k · exp( -β · (intensity_p − intensity_q)² )
 ```
 
-So cutting *through* a smooth region is expensive, while cutting along a real
-image edge is cheap. `β` is estimated from the image's own average neighbour
-contrast, so the scale adapts per photo rather than being a magic constant.
+So cutting through the middle of a smooth region is expensive, while cutting
+along a real image edge is cheap. `β` comes from the image's own average
+neighbour contrast, so the scale adapts per photo instead of being a magic
+constant someone picked once.
 
-**T-links** connect every pixel to both terminals. For an unmarked pixel, the
-weights come from intensity histograms built from your scribbles — a pixel that
-looks like the background is cheap to cut away from `S`, and vice versa:
+**T-links** join every pixel to both terminals. For an unmarked pixel the
+weights come from intensity histograms built out of your scribbles, so a pixel
+that looks like the background is cheap to cut away from `S`, and the other way
+round:
 
 ```
 weight(S, p) = −log P(intensity_p | background)
 weight(p, T) = −log P(intensity_p | foreground)
 ```
 
-Scribbled pixels are special-cased: they get a **hard constraint** `K` on one
-side and `0` on the other, where `K` is larger than any pixel's total N-link
-weight. That makes relabelling a pixel you explicitly marked always more
-expensive than cutting elsewhere, so your input is never overridden.
+Pixels you actually scribbled on are a special case. They get a **hard
+constraint** `K` on one side and `0` on the other, where `K` is bigger than any
+pixel's total N-link weight. Relabelling a pixel you explicitly marked is then
+always more expensive than cutting somewhere else, so your input never gets
+overridden.
 
-**The cut.** [Edmonds-Karp](maxflow/edmonds_karp.py) then finds the maximum flow
+**Then the cut.** [Edmonds-Karp](maxflow/edmonds_karp.py) finds the maximum flow
 from `S` to `T`:
 
-1. **Residual graph** — every edge `(u, v)` gets a reverse edge `(v, u)` at
+1. **Residual graph.** Every edge `(u, v)` gets a reverse edge `(v, u)` at
    capacity 0, so flow pushed one way can be partly undone later.
-2. **Find an augmenting path** — BFS from source to sink using only edges with
-   spare capacity. BFS always returns the *shortest* such path, which is what
-   bounds the algorithm to `O(V · E²)` rather than letting it degrade on
-   adversarial graphs.
-3. **Push flow** — send the path's bottleneck capacity along it, updating both
+2. **Find an augmenting path.** BFS from source to sink, using only edges with
+   spare capacity. BFS always returns the shortest such path, and that is what
+   bounds the algorithm to `O(V · E²)` instead of letting it fall apart on
+   awkward graphs.
+3. **Push flow.** Send the path's bottleneck capacity along it, updating both
    directions.
-4. **Repeat** until no augmenting path remains. The flow is now maximum.
-5. **Read off the cut** — whatever is still reachable from `S` in the residual
-   graph is the foreground. By the max-flow min-cut theorem, that partition is
-   the cheapest possible one, so it's the optimal boundary given the evidence.
+4. **Repeat** until there is no augmenting path left. The flow is now maximum.
+5. **Read off the cut.** Whatever is still reachable from `S` in the residual
+   graph is the foreground. By the max-flow min-cut theorem that partition is
+   the cheapest one available, so it is the best boundary the evidence supports.
 
-Because cutting is cheap along image edges and expensive elsewhere, the optimal
-cut naturally hugs the object's outline.
+Since cutting is cheap along image edges and expensive everywhere else, the
+optimal cut ends up hugging the object's outline.
 
 ### Two solvers, one algorithm
 
-[`maxflow/edmonds_karp.py`](maxflow/edmonds_karp.py) is the readable reference:
-a nested-dict graph walked one edge at a time. It's what the hand-verified tests
-exercise, but a dict probe per edge makes it too slow to segment with directly.
+[`maxflow/edmonds_karp.py`](maxflow/edmonds_karp.py) is the readable version: a
+nested-dict graph, walked one edge at a time. It is what the hand-verified tests
+check against, but a dict lookup per edge makes it far too slow to actually
+segment with.
 
-[`maxflow/grid_maxflow.py`](maxflow/grid_maxflow.py) runs the *same* algorithm
-on the 4-connected pixel grid, holding residual capacities in numpy arrays so
-each BFS level expands as a few whole-array operations. It also saturates every
-`S → pixel → T` path in one vectorised step, since those are all shortest paths
-and share no edges. Same asymptotics, far smaller constant.
+[`maxflow/grid_maxflow.py`](maxflow/grid_maxflow.py) runs the same algorithm on
+the 4-connected pixel grid, keeping residual capacities in numpy arrays so each
+BFS level expands as a handful of whole-array operations. It also saturates
+every `S → pixel → T` path in one vectorised step, since those are all shortest
+paths and share no edges. Same asymptotics, much smaller constant.
 
-The two must agree exactly, and
+The two have to agree exactly, and
 [`tests/test_grid_maxflow.py`](tests/test_grid_maxflow.py) pins the fast one to
 the reference on randomised graphs.
 
 ### Full-resolution output
 
 The solve is `O(V · E²)`, so the cut runs on a small grid (56px on the longest
-side) — but the **output is not downscaled**. The coarse mask is upsampled and
-pushed through a [guided filter](https://kaiminghe.github.io/eccv10/) using the
-full-resolution image as the guide, which snaps the boundary back onto real
-image edges, and the mask is then applied to the *original* pixels. Foreground
-pixels come out bit-for-bit identical to the input.
+side). The **output is not downscaled**, though. The coarse mask gets upsampled
+and pushed through a [guided filter](https://kaiminghe.github.io/eccv10/) using
+the full-resolution image as the guide, which snaps the boundary back onto real
+image edges, and the mask is then applied to the original pixels. Foreground
+pixels come out bit-for-bit identical to what you put in.
 
-![Before and after: a blocky 30px cutout beside a full-resolution one](docs/quality_before_after.png)
+![Before and after: a blocky 30px cutout beside a full-resolution one](assets/quality_before_after.png)
 
-Both panels use the same photo, the same scribbles and the same algorithm. The
-only difference is that the left one composited the cutout on the solver's
-30px grid and scaled it up, which is what earlier versions of this project did.
-
----
+Same photo, same scribbles, same algorithm in both panels. The only difference
+is that the left one composited the cutout on the solver's 30px grid and scaled
+it up, which is what this project used to do.
 
 ## Screenshots
 
@@ -123,22 +122,23 @@ only difference is that the left one composited the cutout on the solver's
 | --- | --- | --- |
 | ![Empty upload screen](screenshots/01-upload.png) | ![Red and blue scribbles drawn over a photo of a horse](screenshots/02-scribbles.png) | ![Original, scribbles and segmented result side by side with the elapsed time](screenshots/03-result.png) |
 
-These are captured from the running app, not mocked up —
+These come from the running app rather than a mockup.
 [`scripts/capture_screenshots.py`](scripts/capture_screenshots.py) drives it
-headlessly with Playwright and regenerates them, including the GIF at the top.
+headlessly with Playwright and regenerates them, GIF included.
 
 ### Results on real photos
 
 `segment()` run on four Creative Commons animal photos, each at its own
 resolution:
 
-![Original, scribbles, and segmented result for a dog, hen, horse, and tiger photo](docs/demo_animals.png)
+![Original, scribbles, and segmented result for a dog, hen, horse, and tiger photo](assets/demo_animals.png)
 
 The dog and tiger each needed one extra scribble, and the reason is worth
-knowing: the colour model is a single **grayscale** intensity histogram, so
-where a subject and its background share a tonal range — a tiger's shadowed
-stripes against dark water, a dog's face against an unlit room — two scribbles
-aren't enough to separate them. A colour model would need fewer corrections.
+knowing. The colour model is a single **grayscale** intensity histogram, so
+where a subject and its background occupy the same tonal range (a tiger's
+shadowed stripes against dark water, a dog's face against an unlit room) two
+scribbles do not carry enough information to separate them. A colour model would
+need fewer corrections.
 
 Photos from Wikimedia Commons: [dog](https://commons.wikimedia.org/wiki/File:Dog_(Unsplash).jpg)
 (Multa Media, CC0), [hen](https://commons.wikimedia.org/wiki/File:American_Game_hen.jpg)
@@ -146,9 +146,7 @@ Photos from Wikimedia Commons: [dog](https://commons.wikimedia.org/wiki/File:Dog
 (Annie Spratt, CC0), [tiger](https://commons.wikimedia.org/wiki/File:Wet_tiger_(Unsplash).jpg)
 (佑翔 賴, CC0).
 
----
-
-## Install & usage
+## Install and usage
 
 ```bash
 git clone https://github.com/singha105/mincut-segmentation.git
@@ -158,20 +156,20 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Run the app — this is the single command you need:
+Then run the app. This is the only command you need:
 
 ```bash
 streamlit run app.py
 ```
 
 It opens at `http://localhost:8501`. Upload an image, pick **Foreground (red)**
-or **Background (blue)**, scribble on the canvas, and click **Segment**. You can
-render the background as black, dimmed, or transparent, and download the result
-at your image's original resolution.
+or **Background (blue)**, scribble on the canvas, hit **Segment**. The background
+can be rendered black, dimmed, or transparent, and the download comes out at
+your image's original resolution.
 
 ### From the command line
 
-No UI needed. Scribbles are given as rectangles, or as a red/blue scribble
+No UI needed. Scribbles are given either as rectangles or as a red/blue scribble
 image of the same shape:
 
 ```bash
@@ -183,11 +181,11 @@ python -m segmentation.cli sample_images/horse.jpg out.png \
 segmented 800x788 in 0.85s (24.3% foreground) -> out.png
 ```
 
-`--fg` / `--bg` take `x,y,width,height` and can be repeated. Other options:
-`--scribbles strokes.png` to use a scribble image instead, `--background
-black|dim|transparent`, `--mask out-mask.png` to also dump the raw mask,
-`--grid N` to change the cut resolution, and `--fast` for the
-Boykov-Kolmogorov solver. `--help` lists them all.
+`--fg` and `--bg` take `x,y,width,height` and can be repeated. There is also
+`--scribbles strokes.png` to use a scribble image instead,
+`--background black|dim|transparent`, `--mask out-mask.png` to dump the raw
+mask, `--grid N` to change the cut resolution, and `--fast`. Run `--help` for
+the full list.
 
 ### Using it as a library
 
@@ -208,8 +206,8 @@ result, mask = cutout(image, scribbles, background="transparent")
 Image.fromarray(result).save("out.png")
 ```
 
-`segment_image(image, scribbles)` returns just the boolean mask at full
-resolution; `segment()` solves directly at whatever resolution you hand it.
+`segment_image(image, scribbles)` gives you just the boolean mask at full
+resolution. `segment()` solves directly at whatever resolution you hand it.
 
 ### Optional extras
 
@@ -221,7 +219,7 @@ python -m playwright install chromium
 
 ### Make targets
 
-Every workflow above is also a make target — run `make` on its own to list them:
+Everything above is also a make target. Run `make` on its own to list them:
 
 | Target | What it does |
 | --- | --- |
@@ -234,56 +232,55 @@ Every workflow above is also a make target — run `make` on its own to list the
 | `make diagram` | regenerate the graph diagram above |
 | `make install` / `install-fast` / `install-dev` | the three dependency sets |
 
----
-
 ## Performance
 
-Measured with [`benchmarks/measure_timing.py`](benchmarks/measure_timing.py)
-(best of 3 runs, Apple Silicon). The **input** resolution is what you pass in
+Measured with [`benchmarks/measure_timing.py`](benchmarks/measure_timing.py),
+best of 3 runs on Apple Silicon. The **input** resolution is what you pass in
 and get back; the cut grid is the internal working resolution.
 
 | Input resolution | Megapixels | Cut grid | Nodes | Slowest photo |
 | --- | ---: | ---: | ---: | ---: |
-| 400px longest side | 0.11 – 0.16 | 40x56 – 56x56 | 2,072 – 3,136 | 1.13s |
-| 600px longest side | 0.24 – 0.36 | 40x56 – 56x56 | 2,072 – 3,136 | 1.23s |
-| 800px longest side | 0.43 – 0.64 | 40x56 – 56x56 | 2,072 – 3,136 | 1.21s |
+| 400px longest side | 0.11 to 0.16 | 40x56 to 56x56 | 2,072 to 3,136 | 1.16s |
+| 600px longest side | 0.24 to 0.36 | 40x56 to 56x56 | 2,072 to 3,136 | 1.29s |
+| 800px longest side | 0.43 to 0.64 | 40x56 to 56x56 | 2,072 to 3,136 | 1.22s |
 
 End-to-end time is roughly flat in input resolution, because the cut runs on a
-fixed-size grid and the other stages are cheap — graph construction and the
-full-resolution refinement are ~0.01s each. Practically, **full-resolution
-output is nearly free**; the solve is the whole cost.
+fixed-size grid and the other stages are cheap. Graph construction and the
+full-resolution refinement are about 0.01s each. In practice that means
+**full-resolution output is nearly free**, and the solve is the whole cost.
 
-The 56px cap is set by the *worst* case rather than the average, because the
-number of augmenting paths depends on the image, not just its size. `hen.jpg` —
-a dark bird on dark soil, so foreground and background overlap heavily in
-intensity — needs far more augmenting paths than the others and sets the ceiling
-(2.5s at a 64px grid, 1.2s at 56px).
+The 56px cap is set by the worst case rather than the average, because the
+number of augmenting paths depends on the image and not just its size.
+`hen.jpg` is a dark bird on dark soil, so foreground and background overlap
+heavily in intensity, and it needs far more augmenting paths than the others.
+It sets the ceiling: 2.5s at a 64px grid, 1.2s at 56px.
 
 <details>
 <summary><strong>Why 800px isn't slower than 600px</strong></summary>
 
 <br>
 
-The obvious objection to that table: 800px reads as *faster* than 600px, which
-looks backwards. It isn't a typo, and it isn't really a speed difference either.
+Fair objection to that table: 800px reads as *faster* than 600px, which looks
+backwards. It is not a typo, and it is not really a speed difference either.
 
-Look at the "Cut grid" and "Nodes" columns — identical across all three rows.
-Because the grid is capped on the longest side, a given photo reduces to the
-same grid whatever you feed in: `hen.jpg` becomes 40x56 (2,240 nodes) from a
+Look at the "Cut grid" and "Nodes" columns, which are identical across all three
+rows. Because the grid is capped on the longest side, a given photo reduces to
+the same grid whatever you feed in. `hen.jpg` becomes 40x56 (2,240 nodes) from a
 400px, 600px, or 800px input. **The solver does the same amount of work in every
-row.** Input resolution only affects the refine-and-composite stages, ~0.01s.
+row.** Input resolution only affects the refine-and-composite stages, which run
+in about 0.01s.
 
-What does change is the grid's *content*. Downscaling 800→56 and 600→56 are
-different reductions, so the resulting pixels differ slightly — measured, those
-two paths land within a mean absolute difference of 0.14 intensity levels
-(max 1). Those small shifts move the edge weights, which moves the
+What does change is the grid's *content*. Downscaling 800 to 56 and 600 to 56
+are different reductions, so the resulting pixels differ slightly. Measured,
+those two paths land within a mean absolute difference of 0.14 intensity levels
+(max 1). Small shifts like that move the edge weights, which moves the
 augmenting-path count.
 
-That effect is tiny, and run-to-run spread on a fixed input is ~2% (10 runs at
-800px: min 1.157s, max 1.180s). So 600px and 800px are within noise of each
-other, and **differences under ~5% between rows aren't meaningful.** The one
-clear signal is `tiger.jpg`, whose downscaled content barely changes: flat at
-0.67s / 0.66s / 0.67s.
+The effect is tiny, and run-to-run spread on a fixed input is about 2% (10 runs
+at 800px: min 1.157s, max 1.180s). So 600px and 800px sit within noise of each
+other, and **differences under roughly 5% between rows are not meaningful.** The
+one clear signal is `tiger.jpg`, whose downscaled content barely changes at all:
+0.66s, 0.64s, 0.66s.
 
 </details>
 
@@ -291,7 +288,7 @@ clear signal is `tiger.jpg`, whose downscaled content barely changes: flat at
 
 Edmonds-Karp is the point of this project, so it stays the default. But
 Boykov-Kolmogorov is the max-flow variant built for exactly these vision grid
-graphs, and it's available opt-in via
+graphs, and it is available opt-in through
 [PyMaxflow](https://github.com/pmneila/PyMaxflow):
 
 ```bash
@@ -303,81 +300,101 @@ segment_image(image, scribbles, fast=True)
 ```
 
 [`benchmarks/compare_solvers.py`](benchmarks/compare_solvers.py) runs both on
-identical graphs and checks they agree *before* reporting any timing — a speed
-number would be meaningless if the answers differed. Results
+identical graphs and checks they agree *before* reporting any timing, since a
+speed number would be meaningless if the answers differed. Results
 ([markdown](benchmarks/solver_comparison.md), [CSV](benchmarks/solver_comparison.csv)):
 
 | Image | Cut grid | Nodes | Edmonds-Karp (from scratch) | Boykov-Kolmogorov (PyMaxflow) | Speed-up | Same result |
 | --- | --- | ---: | ---: | ---: | ---: | :---: |
-| dog.jpg | 56x56 | 3,136 | 0.86s | 0.001s | 1116x | yes |
-| hen.jpg | 40x56 | 2,240 | 1.27s | 0.001s | 1312x | yes |
-| horse.jpg | 56x55 | 3,080 | 1.05s | 0.001s | 1028x | yes |
-| tiger.jpg | 37x56 | 2,072 | 0.65s | 0.000s | 1332x | yes |
-| dog.jpg | 96x96 | 9,216 | 2.53s | 0.002s | 1337x | yes |
-| hen.jpg | 69x96 | 6,624 | 9.66s | 0.005s | 2038x | yes |
-| horse.jpg | 96x95 | 9,120 | 2.72s | 0.002s | 1333x | yes |
-| tiger.jpg | 64x96 | 6,144 | 4.12s | 0.002s | 1812x | yes |
-| dog.jpg | 160x160 | 25,600 | not run | 0.007s | — | — |
-| hen.jpg | 114x160 | 18,240 | not run | 0.013s | — | — |
-| horse.jpg | 160x158 | 25,280 | not run | 0.007s | — | — |
-| tiger.jpg | 106x160 | 16,960 | not run | 0.007s | — | — |
+| dog.jpg | 56x56 | 3,136 | 0.87s | 0.001s | 952x | yes |
+| hen.jpg | 40x56 | 2,240 | 1.20s | 0.001s | 1216x | yes |
+| horse.jpg | 56x55 | 3,080 | 1.03s | 0.001s | 1220x | yes |
+| tiger.jpg | 37x56 | 2,072 | 0.64s | 0.000s | 1348x | yes |
+| dog.jpg | 96x96 | 9,216 | 2.49s | 0.002s | 1376x | yes |
+| hen.jpg | 69x96 | 6,624 | 9.70s | 0.005s | 2139x | yes |
+| horse.jpg | 96x95 | 9,120 | 2.70s | 0.002s | 1358x | yes |
+| tiger.jpg | 64x96 | 6,144 | 4.12s | 0.002s | 1785x | yes |
+| dog.jpg | 160x160 | 25,600 | not run | 0.007s | n/a | n/a |
+| hen.jpg | 114x160 | 18,240 | not run | 0.013s | n/a | n/a |
+| horse.jpg | 160x158 | 25,280 | not run | 0.006s | n/a | n/a |
+| tiger.jpg | 106x160 | 16,960 | not run | 0.007s | n/a | n/a |
 
-Roughly a **1000–2000× speed-up on the solve**, with identical masks in every
-case compared. Above a 96px grid the from-scratch solver takes long enough that
-timing every image isn't worth the wall time, so it's marked "not run".
+Roughly a **1000x to 2000x speed-up on the solve**, with identical masks in
+every case compared. Past a 96px grid the from-scratch solver takes long enough
+that timing every image is not worth the wall time, so those rows say "not run".
 
-What that buys end-to-end:
+What that buys end to end:
 
 | Mode | Cut grid cap | Slowest photo |
 | --- | ---: | ---: |
-| Edmonds-Karp (default) | 56px | 1.23s |
+| Edmonds-Karp (default) | 56px | 1.26s |
 | Boykov-Kolmogorov | 56px | 0.01s |
-| Boykov-Kolmogorov | 256px | 0.05s |
+| Boykov-Kolmogorov | 256px | 0.04s |
 | Boykov-Kolmogorov | 400px | 0.08s |
 
-So fast mode runs a **7× finer cut grid in 1/15th the time** of the default —
-which is the real benefit: the cut itself lands much closer to full resolution,
-leaning less on the refinement pass to recover boundary detail.
+So fast mode runs a **7x finer cut grid in about a fifteenth of the time**. That
+is the real benefit: the cut itself lands much closer to full resolution, so it
+leans less on the refinement pass to recover boundary detail.
 
-> PyMaxflow's import name is `maxflow`, the same as this project's own package,
-> so from the repo root ours shadows it.
+> One gotcha. PyMaxflow's import name is `maxflow`, the same as this project's
+> own package, so from the repo root ours shadows it.
 > [`maxflow/fast_maxflow.py`](maxflow/fast_maxflow.py) loads it explicitly from
-> site-packages to work around that.
-
----
+> site-packages to get around that.
 
 ## Project structure
 
 ```
 mincut-segmentation/
-├── app.py                       Streamlit UI (upload → scribble → segment → download)
+├── app.py                       Streamlit UI (upload, scribble, segment, download)
 ├── canvas_utils.py              turns canvas strokes into a label mask
 ├── Makefile                     run / test / bench / screenshots / demo targets
 ├── maxflow/
-│   ├── graph_builder.py         image + scribbles → Boykov-Jolly graph
+│   ├── graph_builder.py         image + scribbles into a Boykov-Jolly graph
 │   ├── edmonds_karp.py          from-scratch reference solver (dict graph)
-│   ├── grid_maxflow.py          same algorithm, numpy grid arrays (the fast path)
+│   ├── grid_maxflow.py          same algorithm on numpy grid arrays (the fast path)
 │   └── fast_maxflow.py          optional Boykov-Kolmogorov via PyMaxflow
 ├── segmentation/
-│   ├── segmenter.py             coarse cut → full-res refinement → mask & compositing
+│   ├── segmenter.py             coarse cut, full-res refinement, mask and compositing
 │   └── cli.py                   command-line interface
+├── web/                         the browser version (see below)
+│   ├── index.html
+│   └── segmentation.js          JS port of the whole pipeline
+├── assets/                      images shared by the README and the web page
+├── screenshots/                 captured app screenshots and demo GIF
 ├── tests/                       graphs, solver equivalence, pipeline, CLI, app
 ├── benchmarks/                  timing harness, solver comparison, saved results
-├── scripts/
-│   ├── capture_screenshots.py   drives the app with Playwright for the screenshots/GIF
-│   └── make_diagram.py          renders the graph diagram above
-├── sample_images/               synthetic shapes + four CC-licensed animal photos
-├── screenshots/                 captured app screenshots and demo GIF
-└── docs/                        GitHub Pages site (a JS port of the same pipeline)
+├── scripts/                     screenshot capture, diagram and demo-image generators
+└── sample_images/               synthetic shapes plus four CC-licensed animal photos
 ```
 
-The [live page](https://singha105.github.io/mincut-segmentation/) runs a
-JavaScript port of this exact pipeline
-([`docs/segmentation.js`](docs/segmentation.js)) entirely client-side — image
-decoding, graph construction, the max-flow solve, and the full-resolution
-refinement all happen in the browser, with no backend.
+## The web page
 
----
+[`web/`](web/) holds a standalone browser version, live at
+**[singha105.github.io/mincut-segmentation](https://singha105.github.io/mincut-segmentation/)**.
+It is only two files:
+
+| File | What it is |
+| --- | --- |
+| [`web/index.html`](web/index.html) | the page itself, self-contained styling and markup |
+| [`web/segmentation.js`](web/segmentation.js) | a JavaScript port of the whole pipeline |
+
+[`segmentation.js`](web/segmentation.js) mirrors the Python function for
+function: graph construction, the grid Edmonds-Karp solver, and the guided-filter
+refinement. Everything runs client-side, so image decoding, the max-flow solve
+and the full-resolution compositing all happen in your browser with no backend
+at all. Uploaded images never leave your machine.
+
+To work on it locally, serve the folder and open it:
+
+```bash
+python -m http.server 8000 --directory web
+```
+
+One wrinkle: the page loads its images from `assets/`, which sits outside `web/`
+so the README can share them. The
+[Pages workflow](.github/workflows/pages.yml) copies both into the published
+site. If you are serving `web/` directly and the demo images 404, that is why;
+symlink or copy `assets/` into `web/` while you work.
 
 ## Running the tests
 
@@ -385,31 +402,31 @@ refinement all happen in the browser, with no backend.
 pytest
 ```
 
-70 tests covering:
+70 tests, covering:
 
-- **Hand-verified max-flow** — small graphs with known answers, including one
-  needing multiple augmenting-path iterations
+- **Hand-verified max-flow.** Small graphs with known answers, including one
+  that needs several augmenting-path iterations
   ([`test_maxflow.py`](tests/test_maxflow.py))
-- **Solver equivalence** — the fast grid solver pinned to the reference on
+- **Solver equivalence.** The fast grid solver pinned to the reference on
   randomised graphs ([`test_grid_maxflow.py`](tests/test_grid_maxflow.py))
-- **Graph construction** — N-link weighting, and that hard constraints really do
+- **Graph construction.** N-link weighting, and that hard constraints really do
   dominate ([`test_graph_builder.py`](tests/test_graph_builder.py))
-- **The pipeline** — full-resolution masks, that scribbles survive refinement,
-  and that foreground pixels are bit-for-bit the originals
+- **The pipeline.** Full-resolution masks, scribbles surviving refinement, and
+  foreground pixels coming back bit-for-bit identical
   ([`test_segmentation.py`](tests/test_segmentation.py))
-- **Fast mode** — agreement with the reference, skipped when PyMaxflow isn't
-  installed ([`test_fast_maxflow.py`](tests/test_fast_maxflow.py))
-- **Scribble rasterising** — canvas strokes to label masks
+- **Fast mode.** Agreement with the reference, skipped when PyMaxflow is absent
+  ([`test_fast_maxflow.py`](tests/test_fast_maxflow.py))
+- **Scribble rasterising.** Canvas strokes into label masks
   ([`test_canvas_utils.py`](tests/test_canvas_utils.py))
-- **The CLI** — argument parsing, clipping, and end-to-end output
+- **The CLI.** Argument parsing, clipping, end-to-end output
   ([`test_cli.py`](tests/test_cli.py))
-- **The app** — that bad uploads are reported rather than crashing
+- **The app.** Bad uploads reported rather than crashing
   ([`test_app_upload.py`](tests/test_app_upload.py)), plus import and helper
   smoke tests ([`test_app_smoke.py`](tests/test_app_smoke.py))
 
-CI runs the suite twice: once without PyMaxflow (60 passed, 10 skipped —
-proving the project works without the optional dependency) and once with it,
-where all 70 run.
+CI runs the suite twice: once without PyMaxflow, where 60 pass and 10 skip,
+which proves the project works without the optional dependency, and once with
+it, where all 70 run.
 
 To regenerate the screenshots and demo GIF:
 
@@ -419,11 +436,9 @@ python -m playwright install chromium
 python scripts/capture_screenshots.py
 ```
 
----
-
 ## License
 
 [MIT](LICENSE) © Arnab Singh
 
-Sample photos are used under their own licenses (CC0 / CC BY 2.0), credited in
-[Results on real photos](#results-on-real-photos).
+The sample photos are used under their own licenses (CC0 and CC BY 2.0),
+credited under [Results on real photos](#results-on-real-photos).

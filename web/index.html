@@ -446,7 +446,7 @@
   <div class="wrap">
     <h1>Interactive segmentation<br>via graph min-cut</h1>
     <p class="tagline">
-      Scribble red for foreground, blue for background — an Edmonds-Karp
+      Scribble red for foreground, blue for background. An Edmonds-Karp
       max-flow / min-cut solve turns a few marked pixels into a clean
       segmentation mask in under 2 seconds.
     </p>
@@ -472,30 +472,30 @@
     <h2>See it work</h2>
     <p class="section-sub">
       Real output of <code style="font-family: var(--mono);">segment()</code>
-      on each sample image — original, scribbles, and the resulting mask.
+      on each sample image: original, scribbles, and the resulting mask.
     </p>
     <div class="demo-card">
-      <img src="demo.png" alt="Original, scribbles, and segmented result for three sample images">
+      <img src="assets/demo.png" alt="Original, scribbles, and segmented result for three sample images">
     </div>
 
     <p class="section-sub" style="margin-top: 32px;">
       Synthetic shapes are the easy case. Here's the same pipeline on four real
       animal photos, each at its own resolution. The dog and tiger needed one
-      extra scribble apiece — where a subject and its background share a tonal
+      extra scribble apiece. Where a subject and its background share a tonal
       range, a single grayscale colour model can't separate them unaided.
     </p>
     <div class="demo-card">
-      <img src="demo_animals.png" alt="Original, scribbles, and segmented result for a dog, hen, horse, and tiger photo">
+      <img src="assets/demo_animals.png" alt="Original, scribbles, and segmented result for a dog, hen, horse, and tiger photo">
     </div>
 
     <p class="section-sub" style="margin-top: 32px;">
       Results used to be badly pixelated. Same photo, same scribbles, same
-      algorithm below — the difference is that the mask is now refined and
+      algorithm below. The difference is that the mask is now refined and
       composited at full resolution instead of being solved on a 30px grid and
       scaled back up.
     </p>
     <div class="demo-card">
-      <img src="quality_before_after.png" alt="A blocky 30px cutout beside a full-resolution one">
+      <img src="assets/quality_before_after.png" alt="A blocky 30px cutout beside a full-resolution one">
     </div>
   </div>
 </section>
@@ -505,7 +505,7 @@
     <h2>Try it in your browser</h2>
     <p class="section-sub">
       A JavaScript port of the same Edmonds-Karp min-cut pipeline runs right
-      here — no server involved. Upload any image, scribble, and segment.
+      here, with no server involved. Upload any image, scribble, and segment.
     </p>
 
     <div class="try-card">
@@ -578,7 +578,7 @@
         <span class="num">1</span>
         <div>
           <h3>Build the pixel graph</h3>
-          <p>Every pixel becomes a node, plus two terminals — a source (foreground) and a sink (background). Neighboring pixels get an edge weighted by color similarity (N-links); every pixel gets an edge to each terminal weighted by how well it matches the scribbled color histograms (T-links).</p>
+          <p>Every pixel becomes a node, plus two terminals: a source (foreground) and a sink (background). Neighboring pixels get an edge weighted by color similarity (N-links); every pixel gets an edge to each terminal weighted by how well it matches the scribbled color histograms (T-links).</p>
         </div>
       </div>
       <div class="step">
@@ -592,7 +592,7 @@
         <span class="num">3</span>
         <div>
           <h3>Solve max-flow with Edmonds-Karp</h3>
-          <p>BFS repeatedly finds the shortest augmenting path from source to sink and pushes flow along it, until no path remains — implemented from scratch in <code style="font-family: var(--mono);">maxflow/edmonds_karp.py</code>.</p>
+          <p>BFS repeatedly finds the shortest augmenting path from source to sink and pushes flow along it, until no path remains. Implemented from scratch in <code style="font-family: var(--mono);">maxflow/edmonds_karp.py</code>.</p>
         </div>
       </div>
       <div class="step">
