@@ -23,6 +23,7 @@ Edmonds-Karp, written from scratch rather than pulled from a library.
 - [Performance](#performance)
 - [Project structure](#project-structure)
 - [The web page](#the-web-page)
+- [Project phases](#project-phases)
 - [Running the tests](#running-the-tests)
 - [License](#license)
 
@@ -425,6 +426,62 @@ so the README can share them. The
 [Pages workflow](.github/workflows/pages.yml) copies both into the published
 site. If you are serving `web/` directly and the demo images 404, that is why;
 symlink or copy `assets/` into `web/` while you work.
+
+## Project phases
+
+How the project was built, in the order it happened.
+
+- [x] **Phase 1: Project setup**
+  - Repository, package layout, virtualenv and pinned requirements
+  - GitHub Actions running the test suite on every push
+  - MIT license, gitignore, first smoke tests
+
+- [x] **Phase 2: Max-flow from scratch**
+  - Edmonds-Karp with BFS-selected shortest augmenting paths
+  - Min-cut recovery from the final residual graph
+  - Hand-verified tests on small graphs with known answers, including a case
+    needing several augmenting-path iterations
+
+- [x] **Phase 3: Turning an image into a graph**
+  - N-links between neighbouring pixels, weighted by colour similarity with
+    `β` estimated from the image's own contrast
+  - T-links from intensity histograms of the scribbles, plus hard constraints
+    so marked pixels can never be relabelled
+  - The pipeline joining graph construction to the solver, with an integration
+    test on a real sample image
+
+- [x] **Phase 4: Interactive app and browser version**
+  - Streamlit UI: upload, drawable canvas, adjustable brush, timing, download
+  - A GitHub Pages site running a JavaScript port of the whole pipeline
+    client-side, with no backend
+
+- [x] **Phase 5: Real photos, full-resolution output, performance**
+  - Four Creative Commons animal photos as harder test cases
+  - Output no longer inherits the solver's coarse grid. The mask is refined
+    against the full-resolution image with a guided filter, so foreground
+    pixels come back bit-for-bit identical
+  - A second solver on numpy grid arrays, pinned to the reference for
+    equivalence, plus a 56px cut grid to bring the worst case under 2s
+  - Optional Boykov-Kolmogorov fast mode and a benchmark comparing the two
+
+- [x] **Phase 6: Documentation and demo**
+  - Real screenshots and a demo GIF captured by driving the app headlessly
+    with Playwright
+  - A generated diagram of the graph construction
+  - Full README covering the algorithm, install, usage and benchmarks
+
+- [x] **Phase 7: Robustness and tooling**
+  - Unreadable and truncated uploads reported instead of crashing
+  - A command-line interface for use without the UI
+  - A Makefile for the common tasks
+  - CI split into a matrix so the optional fast-mode tests actually run
+    rather than always skipping
+
+- [x] **Phase 8: Restructure and format support**
+  - Web page moved into its own `web/` folder, published by a workflow that
+    fails the build if the page references a missing file
+  - App theme pinned to match the web page, so both look like one project
+  - HEIC/HEIF uploads accepted directly, with EXIF rotation applied
 
 ## Running the tests
 
