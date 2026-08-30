@@ -46,6 +46,23 @@ def _resize_to_max_dim(image: Image.Image, max_dim: int) -> Image.Image:
     return image.resize(new_size)
 
 
+def load_uploaded_image(uploaded_file):
+    """Decode an upload, or return (None, message) if it isn't a usable image.
+
+    The file picker filters by extension, which says nothing about the bytes:
+    a truncated download or a renamed non-image still reaches us and used to
+    surface as a raw traceback. Pillow is also lazy, so the failure often
+    lands on first pixel access rather than on open() -- load() forces it here,
+    where it can be reported properly.
+    """
+    try:
+        image = Image.open(uploaded_file)
+        image.load()
+        return image.convert("RGB"), None
+    except (OSError, ValueError, Image.DecompressionBombError) as error:
+        return None, f"Couldn't read that file as an image ({type(error).__name__}: {error})."
+
+
 st.title("Mincut Segmentation")
 st.write(
     "Upload an image, scribble red for foreground / blue for background, "
@@ -54,8 +71,16 @@ st.write(
 
 uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
 
+original_image, load_error = (None, None)
 if uploaded_file is not None:
-    original_image = Image.open(uploaded_file).convert("RGB")
+    original_image, load_error = load_uploaded_image(uploaded_file)
+    if load_error:
+        st.error(load_error)
+        # Drop any result from a previous upload so it can't be mistaken for
+        # a result for this one.
+        st.session_state.pop("result", None)
+
+if original_image is not None:
     display_image = _resize_to_max_dim(original_image, DISPLAY_MAX_DIM)
 
     st.caption(
