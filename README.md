@@ -1,5 +1,9 @@
 # mincut-segmentation
 
+[![Tests](https://github.com/singha105/mincut-segmentation/actions/workflows/tests.yml/badge.svg)](https://github.com/singha105/mincut-segmentation/actions/workflows/tests.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 Built an interactive image segmentation tool using max-flow/min-cut graph algorithms, achieving segmentation on user-marked images in under 2s.
 
 ![Demo: uploading a photo, scribbling foreground and background, and segmenting it](screenshots/demo.gif)
@@ -165,6 +169,26 @@ or **Background (blue)**, scribble on the canvas, and click **Segment**. You can
 render the background as black, dimmed, or transparent, and download the result
 at your image's original resolution.
 
+### From the command line
+
+No UI needed. Scribbles are given as rectangles, or as a red/blue scribble
+image of the same shape:
+
+```bash
+python -m segmentation.cli sample_images/horse.jpg out.png \
+    --fg 350,300,250,20 --bg 60,40,340,20 --bg 100,740,500,20
+```
+
+```
+segmented 800x788 in 0.85s (24.3% foreground) -> out.png
+```
+
+`--fg` / `--bg` take `x,y,width,height` and can be repeated. Other options:
+`--scribbles strokes.png` to use a scribble image instead, `--background
+black|dim|transparent`, `--mask out-mask.png` to also dump the raw mask,
+`--grid N` to change the cut resolution, and `--fast` for the
+Boykov-Kolmogorov solver. `--help` lists them all.
+
 ### Using it as a library
 
 ```python
@@ -194,6 +218,21 @@ pip install -r requirements-fast.txt   # PyMaxflow, enables fast=True
 pip install -r requirements-dev.txt    # Playwright + imageio, for regenerating screenshots
 python -m playwright install chromium
 ```
+
+### Make targets
+
+Every workflow above is also a make target — run `make` on its own to list them:
+
+| Target | What it does |
+| --- | --- |
+| `make run` | launch the Streamlit app |
+| `make test` | run the test suite |
+| `make demo` | segment a sample photo via the CLI |
+| `make bench` | measure end-to-end segmentation time |
+| `make bench-solvers` | compare Edmonds-Karp against Boykov-Kolmogorov |
+| `make screenshots` | recapture the screenshots and demo GIF |
+| `make diagram` | regenerate the graph diagram above |
+| `make install` / `install-fast` / `install-dev` | the three dependency sets |
 
 ---
 
@@ -313,14 +352,16 @@ leaning less on the refinement pass to recover boundary detail.
 mincut-segmentation/
 ├── app.py                       Streamlit UI (upload → scribble → segment → download)
 ├── canvas_utils.py              turns canvas strokes into a label mask
+├── Makefile                     run / test / bench / screenshots / demo targets
 ├── maxflow/
 │   ├── graph_builder.py         image + scribbles → Boykov-Jolly graph
 │   ├── edmonds_karp.py          from-scratch reference solver (dict graph)
 │   ├── grid_maxflow.py          same algorithm, numpy grid arrays (the fast path)
 │   └── fast_maxflow.py          optional Boykov-Kolmogorov via PyMaxflow
 ├── segmentation/
-│   └── segmenter.py             coarse cut → full-res refinement → mask & compositing
-├── tests/                       hand-verified graphs, solver equivalence, pipeline
+│   ├── segmenter.py             coarse cut → full-res refinement → mask & compositing
+│   └── cli.py                   command-line interface
+├── tests/                       graphs, solver equivalence, pipeline, CLI, app
 ├── benchmarks/                  timing harness, solver comparison, saved results
 ├── scripts/
 │   ├── capture_screenshots.py   drives the app with Playwright for the screenshots/GIF
@@ -344,7 +385,7 @@ refinement all happen in the browser, with no backend.
 pytest
 ```
 
-43 tests covering:
+70 tests covering:
 
 - **Hand-verified max-flow** — small graphs with known answers, including one
   needing multiple augmenting-path iterations
@@ -358,9 +399,17 @@ pytest
   ([`test_segmentation.py`](tests/test_segmentation.py))
 - **Fast mode** — agreement with the reference, skipped when PyMaxflow isn't
   installed ([`test_fast_maxflow.py`](tests/test_fast_maxflow.py))
+- **Scribble rasterising** — canvas strokes to label masks
+  ([`test_canvas_utils.py`](tests/test_canvas_utils.py))
+- **The CLI** — argument parsing, clipping, and end-to-end output
+  ([`test_cli.py`](tests/test_cli.py))
+- **The app** — that bad uploads are reported rather than crashing
+  ([`test_app_upload.py`](tests/test_app_upload.py)), plus import and helper
+  smoke tests ([`test_app_smoke.py`](tests/test_app_smoke.py))
 
-CI runs on every push without PyMaxflow, so it reports 33 passed / 10 skipped;
-with the optional extra installed all 43 run.
+CI runs the suite twice: once without PyMaxflow (60 passed, 10 skipped —
+proving the project works without the optional dependency) and once with it,
+where all 70 run.
 
 To regenerate the screenshots and demo GIF:
 
