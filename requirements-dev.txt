@@ -1,0 +1,7 @@
+# Tooling for regenerating the screenshots, demo GIF, and README diagram.
+# Not needed to run or test the app.
+#
+#     pip install -r requirements-dev.txt
+#     python -m playwright install chromium
+playwright
+imageio
