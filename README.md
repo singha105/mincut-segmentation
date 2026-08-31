@@ -23,6 +23,7 @@ Edmonds-Karp, written from scratch rather than pulled from a library.
 - [Performance](#performance)
 - [Project structure](#project-structure)
 - [The web page](#the-web-page)
+- [Design documents](#design-documents)
 - [Project phases](#project-phases)
 - [Running the tests](#running-the-tests)
 - [License](#license)
@@ -377,6 +378,7 @@ mincut-segmentation/
 ├── screenshots/                 captured app screenshots and demo GIF
 ├── tests/                       graphs, solver equivalence, pipeline, CLI, app
 ├── benchmarks/                  timing harness, solver comparison, saved results
+├── design/                      HLD and LLD documents
 ├── scripts/                     screenshot capture, diagram and demo-image generators
 └── sample_images/               synthetic shapes plus four CC-licensed animal photos
 ```
@@ -426,6 +428,25 @@ so the README can share them. The
 [Pages workflow](.github/workflows/pages.yml) copies both into the published
 site. If you are serving `web/` directly and the demo images 404, that is why;
 symlink or copy `assets/` into `web/` while you work.
+
+## Design documents
+
+Two documents in [`design/`](design/) cover the engineering side, for anyone
+who wants the architecture rather than the algorithm:
+
+| Document | What it covers |
+| --- | --- |
+| [HLD.md](design/HLD.md) | Requirements, layered architecture, component responsibilities, data flow, deployment, technology choices, trade-offs, known limitations |
+| [LLD.md](design/LLD.md) | Data structures, module interfaces, algorithm pseudocode, control-flow diagrams, invariants, error handling, complexity, test strategy |
+
+Diagrams are Mermaid, so they render on GitHub and stay editable as text rather
+than being flat images.
+
+The signatures quoted in the LLD are parsed back out of the document and
+checked against the code by
+[`tests/test_design_docs.py`](tests/test_design_docs.py). Rename a documented
+function and the suite fails, which keeps the documents from quietly going
+stale.
 
 ## Project phases
 
@@ -509,6 +530,8 @@ pytest
   ([`test_cli.py`](tests/test_cli.py))
 - **Image loading.** HEIC/HEIF decoding and EXIF rotation
   ([`test_image_io.py`](tests/test_image_io.py))
+- **Design documents.** Signatures quoted in the LLD still exist in the code
+  ([`test_design_docs.py`](tests/test_design_docs.py))
 - **The app.** Bad uploads reported rather than crashing
   ([`test_app_upload.py`](tests/test_app_upload.py)), plus import and helper
   smoke tests ([`test_app_smoke.py`](tests/test_app_smoke.py))
