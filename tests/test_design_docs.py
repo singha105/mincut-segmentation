@@ -12,9 +12,11 @@ import re
 
 import pytest
 
-DESIGN_DIR = pathlib.Path(__file__).resolve().parent.parent / "design"
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+DESIGN_DIR = REPO_ROOT / "design"
 HLD = DESIGN_DIR / "HLD.md"
 LLD = DESIGN_DIR / "LLD.md"
+GUIDE = REPO_ROOT / "GUIDE.md"
 
 # "### `maxflow/graph_builder.py`" or "### `image_io.py` (reference)"
 MODULE_HEADING = re.compile(r"^### `([\w/]+\.py)`")
@@ -57,6 +59,7 @@ DOCUMENTED = sorted(set(_documented_functions()))
 def test_design_documents_exist():
     assert HLD.is_file(), "design/HLD.md is missing"
     assert LLD.is_file(), "design/LLD.md is missing"
+    assert GUIDE.is_file(), "GUIDE.md is missing"
 
 
 def test_signatures_were_actually_parsed():
@@ -103,7 +106,7 @@ def test_documented_default_grid_matches_the_code():
     assert "56" in LLD.read_text()
 
 
-@pytest.mark.parametrize("document", [HLD, LLD])
+@pytest.mark.parametrize("document", [HLD, LLD, GUIDE])
 def test_cross_links_between_the_documents_resolve(document):
     text = document.read_text()
     for target in re.findall(r"\]\((?!https?:)([^)#][^)]*)\)", text):
@@ -111,9 +114,83 @@ def test_cross_links_between_the_documents_resolve(document):
         assert path.exists(), f"{document.name} links to a missing file: {target}"
 
 
-@pytest.mark.parametrize("document", [HLD, LLD])
+@pytest.mark.parametrize("document", [HLD, LLD, GUIDE])
 def test_documents_have_no_dashes(document):
     """House style for this repository."""
     text = document.read_text()
     assert "—" not in text, f"{document.name} contains an em dash"
     assert "–" not in text, f"{document.name} contains an en dash"
+
+
+def test_guide_worked_example_still_matches_the_code():
+    """GUIDE.md prints real solver output; recompute it and compare.
+
+    The worked example is the part of the guide most likely to go quietly
+    wrong, because it quotes exact numbers. If tuning changes any of them the
+    guide must be regenerated, so this fails rather than letting it drift.
+    """
+    import numpy as np
+
+    from maxflow.graph_builder import (
+        BACKGROUND,
+        FOREGROUND,
+        UNMARKED,
+        build_grid_capacities,
+    )
+    from maxflow.grid_maxflow import solve_grid_min_cut
+
+    image = np.zeros((3, 4, 3), dtype=np.uint8)
+    image[:, :2] = 200
+    image[:, 2:] = 40
+
+    scribbles = np.full((3, 4), UNMARKED, dtype=np.uint8)
+    scribbles[1, 0] = FOREGROUND
+    scribbles[1, 3] = BACKGROUND
+
+    source, sink, east, south = build_grid_capacities(image, scribbles)
+    flow, mask = solve_grid_min_cut(source, sink, east, south)
+
+    text = GUIDE.read_text()
+    for quoted in ["2.941", "153.941", "36.856", "3.497", "2.803", "0.00011068"]:
+        assert quoted in text, f"GUIDE.md no longer quotes {quoted}"
+
+    assert round(east[0, 1], 3) == 2.941, "weak N-link changed"
+    assert round(east[0, 0], 3) == 50.0, "strong N-link changed"
+    assert round(source[1, 0], 3) == 153.941, "hard constraint changed"
+    assert round(source[0, 0], 3) == 3.497, "bright-pixel source capacity changed"
+    assert round(source[0, 2], 3) == 2.803, "dark-pixel source capacity changed"
+    assert round(flow, 3) == 36.856, "max flow changed"
+    assert mask.tolist() == [[True, True, False, False]] * 3, "resulting mask changed"
+
+
+def test_guide_cut_cost_equals_max_flow():
+    """The guide claims the severed edges sum to the max flow. Verify it."""
+    import numpy as np
+
+    from maxflow.graph_builder import (
+        BACKGROUND,
+        FOREGROUND,
+        UNMARKED,
+        build_grid_capacities,
+    )
+    from maxflow.grid_maxflow import solve_grid_min_cut
+
+    image = np.zeros((3, 4, 3), dtype=np.uint8)
+    image[:, :2] = 200
+    image[:, 2:] = 40
+    scribbles = np.full((3, 4), UNMARKED, dtype=np.uint8)
+    scribbles[1, 0] = FOREGROUND
+    scribbles[1, 3] = BACKGROUND
+
+    source, sink, east, south = build_grid_capacities(image, scribbles)
+    flow, mask = solve_grid_min_cut(source, sink, east, south)
+
+    severed = sum(
+        east[y, x] for y in range(3) for x in range(3) if mask[y, x] and not mask[y, x + 1]
+    )
+    severed += sum(
+        south[y, x] for y in range(2) for x in range(4) if mask[y, x] and not mask[y + 1, x]
+    )
+    severed += source[~mask].sum() + sink[mask].sum()
+
+    assert severed == pytest.approx(flow), "cut cost should equal the max flow"

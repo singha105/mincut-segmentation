@@ -15,6 +15,10 @@ don't. From those few marked pixels it works out the whole boundary, and hands
 back a cutout at the resolution you gave it. The max-flow solver underneath is
 Edmonds-Karp, written from scratch rather than pulled from a library.
 
+New here? **[GUIDE.md](GUIDE.md)** explains the whole thing from first
+principles, assuming no graph theory, including a fully worked example with
+real numbers.
+
 ## Contents
 
 - [How it works](#how-it-works)
@@ -378,6 +382,7 @@ mincut-segmentation/
 ├── screenshots/                 captured app screenshots and demo GIF
 ├── tests/                       graphs, solver equivalence, pipeline, CLI, app
 ├── benchmarks/                  timing harness, solver comparison, saved results
+├── GUIDE.md                     the complete explainer, concepts to implementation
 ├── design/                      HLD and LLD documents
 ├── scripts/                     screenshot capture, diagram and demo-image generators
 └── sample_images/               synthetic shapes plus four CC-licensed animal photos
@@ -431,11 +436,11 @@ symlink or copy `assets/` into `web/` while you work.
 
 ## Design documents
 
-Two documents in [`design/`](design/) cover the engineering side, for anyone
-who wants the architecture rather than the algorithm:
+Three documents, depending on what you want:
 
 | Document | What it covers |
 | --- | --- |
+| [GUIDE.md](GUIDE.md) | The complete explainer: the concepts from scratch, the graph construction with a worked example, every engineering problem and how it was solved |
 | [HLD.md](design/HLD.md) | Requirements, layered architecture, component responsibilities, data flow, deployment, technology choices, trade-offs, known limitations |
 | [LLD.md](design/LLD.md) | Data structures, module interfaces, algorithm pseudocode, control-flow diagrams, invariants, error handling, complexity, test strategy |
 
