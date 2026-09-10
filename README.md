@@ -553,6 +553,16 @@ python -m playwright install chromium
 python scripts/capture_screenshots.py
 ```
 
+## Author
+
+**Arnab Singh** — M.S. Computer Science, University of Dayton (Dec 2026).
+Building toward DevOps, Cloud/AWS and Platform Engineering.
+
+[GitHub profile](https://github.com/singha105) ·
+[Portfolio](https://singha105.github.io) ·
+[LinkedIn](https://www.linkedin.com/in/singharnab/) ·
+[arnabsingh001@gmail.com](mailto:arnabsingh001@gmail.com)
+
 ## License
 
 [MIT](LICENSE) © Arnab Singh
