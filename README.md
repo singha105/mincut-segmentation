@@ -434,6 +434,20 @@ so the README can share them. The
 site. If you are serving `web/` directly and the demo images 404, that is why;
 symlink or copy `assets/` into `web/` while you work.
 
+### Accessibility
+
+The scribble tool works without a mouse. Focus the image, move the brush with
+the arrow keys (Shift for bigger steps), press Space to start or stop painting,
+and F or B to switch between foreground and background. **Mark center and
+edges** gets a result with no drawing at all. Status changes and the brush
+position are announced to screen readers, and the result says how much of the
+image was kept.
+
+[`tests/test_web_accessibility.py`](tests/test_web_accessibility.py) runs
+axe-core at each stage (WCAG 2.2 AA and best-practice rules) and drives the
+whole flow from the keyboard in Chrome. It has not been tried with a real
+screen reader yet.
+
 ## Design documents
 
 Three documents, depending on what you want:

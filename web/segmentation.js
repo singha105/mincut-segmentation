@@ -408,6 +408,9 @@
   const downloadBtn = document.getElementById("downloadBtn");
   const brushSizeInput = document.getElementById("brushSize");
   const backgroundSelect = document.getElementById("backgroundStyle");
+  const autoMarkBtn = document.getElementById("autoMarkBtn");
+  const keyboardHelp = document.getElementById("keyboardHelp");
+  const canvasAnnouncer = document.getElementById("canvasAnnouncer");
 
   if (!fileInput) return; // section not present on this page
 
@@ -423,6 +426,12 @@
   let isDrawing = false;
   let lastPoint = null;
 
+  // Keyboard brush, in display pixels (the canvas's own coordinates).
+  let keyPos = null;
+  let penDown = false;
+  let showCursor = false;
+  let segmenting = false;
+
   function currentStrokeColor() {
     const checked = document.querySelector('input[name="scribbleMode"]:checked');
     return checked && checked.value === "bg" ? "#0000ff" : "#ff0000";
@@ -437,6 +446,25 @@
     displayCtx.clearRect(0, 0, tryCanvas.width, tryCanvas.height);
     displayCtx.drawImage(fullCanvas, 0, 0, tryCanvas.width, tryCanvas.height);
     displayCtx.drawImage(strokeCanvas, 0, 0, tryCanvas.width, tryCanvas.height);
+    if (showCursor && keyPos) drawKeyCursor();
+  }
+
+  /** Drawn only on the display canvas, so it can never end up in the scribbles. */
+  function drawKeyCursor() {
+    const [x, y] = keyPos;
+    const radius = Math.max(4, Number(brushSizeInput.value) / 2);
+    // Black under white stays visible on both light and dark photos.
+    for (const [color, width] of [["#000000", 4], ["#ffffff", 2]]) {
+      displayCtx.strokeStyle = color;
+      displayCtx.lineWidth = width;
+      displayCtx.beginPath();
+      displayCtx.arc(x, y, radius, 0, Math.PI * 2);
+      displayCtx.moveTo(x - radius - 6, y);
+      displayCtx.lineTo(x + radius + 6, y);
+      displayCtx.moveTo(x, y - radius - 6);
+      displayCtx.lineTo(x, y + radius + 6);
+      displayCtx.stroke();
+    }
   }
 
   function displayToFull(evt) {
@@ -485,10 +513,14 @@
       displayScale = fullWidth / tryCanvas.width;
 
       latestMask = null;
+      keyPos = null;
+      penDown = false;
+      showCursor = false;
       redrawDisplay();
 
       scribbleControls.hidden = false;
       canvasWrap.hidden = false;
+      keyboardHelp.hidden = false;
       tryActions.hidden = false;
       tryResults.hidden = true;
       setStatus(`Loaded ${fullWidth}x${fullHeight}. Results keep this resolution.`, false);
@@ -520,6 +552,7 @@
 
   tryCanvas.addEventListener("pointerdown", (evt) => {
     if (!strokeCtx) return;
+    showCursor = false;
     isDrawing = true;
     tryCanvas.setPointerCapture(evt.pointerId);
     lastPoint = displayToFull(evt);
@@ -543,13 +576,131 @@
   tryCanvas.addEventListener("pointerleave", stopDrawing);
   tryCanvas.addEventListener("pointercancel", stopDrawing);
 
+  // Keyboard drawing, for anyone who can't use a pointer.
+  const KEY_STEP = 8;
+  const KEY_STEP_LARGE = 32;
+  const KEY_DIRECTIONS = {
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    ArrowUp: [0, -1],
+    ArrowDown: [0, 1],
+  };
+
+  function announce(text) {
+    canvasAnnouncer.textContent = text;
+  }
+
+  function keyPosInFullPixels(position) {
+    return [position[0] * displayScale, position[1] * displayScale];
+  }
+
+  function describeKeyPos() {
+    const across = Math.round((keyPos[0] / tryCanvas.width) * 100);
+    const down = Math.round((keyPos[1] / tryCanvas.height) * 100);
+    return `${across}% across, ${down}% down`;
+  }
+
+  function scribbleModeName() {
+    const checked = document.querySelector('input[name="scribbleMode"]:checked');
+    return checked && checked.value === "bg" ? "background" : "foreground";
+  }
+
+  function showKeyCursor() {
+    if (!keyPos) keyPos = [Math.floor(tryCanvas.width / 2), Math.floor(tryCanvas.height / 2)];
+    showCursor = true;
+  }
+
+  function moveKeyCursor(direction, distance) {
+    const from = keyPos;
+    keyPos = [
+      Math.min(tryCanvas.width - 1, Math.max(0, from[0] + direction[0] * distance)),
+      Math.min(tryCanvas.height - 1, Math.max(0, from[1] + direction[1] * distance)),
+    ];
+    if (penDown) drawStroke(keyPosInFullPixels(from), keyPosInFullPixels(keyPos));
+    announce(`${penDown ? "Painting, " : ""}${describeKeyPos()}.`);
+  }
+
+  function setPen(down) {
+    penDown = down;
+    if (down) {
+      const point = keyPosInFullPixels(keyPos);
+      drawStroke(point, point);
+      announce(`Painting ${scribbleModeName()} at ${describeKeyPos()}.`);
+    } else {
+      announce("Stopped painting.");
+    }
+  }
+
+  function selectScribbleMode(value) {
+    document.querySelector(`input[name="scribbleMode"][value="${value}"]`).checked = true;
+    announce(`${scribbleModeName()} brush.`);
+  }
+
+  tryCanvas.addEventListener("focus", () => {
+    // A mouse click also focuses the canvas; only keyboard users need the cursor.
+    if (!strokeCtx || !tryCanvas.matches(":focus-visible")) return;
+    showKeyCursor();
+    redrawDisplay();
+    announce(`Brush at ${describeKeyPos()}.`);
+  });
+
+  tryCanvas.addEventListener("blur", () => {
+    penDown = false;
+    showCursor = false;
+    if (strokeCtx) redrawDisplay();
+  });
+
+  tryCanvas.addEventListener("keydown", (evt) => {
+    if (!strokeCtx || evt.ctrlKey || evt.metaKey || evt.altKey) return;
+    const direction = KEY_DIRECTIONS[evt.key];
+    const key = evt.key.toLowerCase();
+    // Everything else, Tab above all, has to keep working as usual.
+    if (!direction && ![" ", "escape", "f", "b"].includes(key)) return;
+    evt.preventDefault();
+    showKeyCursor();
+
+    if (direction) {
+      moveKeyCursor(direction, evt.shiftKey ? KEY_STEP_LARGE : KEY_STEP);
+    } else if (key === " ") {
+      if (!evt.repeat) setPen(!penDown);
+    } else if (key === "escape") {
+      if (penDown) setPen(false);
+    } else {
+      selectScribbleMode(key === "b" ? "bg" : "fg");
+    }
+    redrawDisplay();
+  });
+
   clearBtn.addEventListener("click", () => {
     if (!strokeCtx) return;
     strokeCtx.clearRect(0, 0, fullWidth, fullHeight);
     latestMask = null;
     redrawDisplay();
     tryResults.hidden = true;
-    setStatus("", false);
+    setStatus("Scribbles cleared.", false);
+  });
+
+  // A way to get a result with no drawing at all: assume the subject is roughly
+  // central and that the image edges are background.
+  autoMarkBtn.addEventListener("click", () => {
+    if (!strokeCtx) return;
+    const shortSide = Math.min(fullWidth, fullHeight);
+    strokeCtx.clearRect(0, 0, fullWidth, fullHeight);
+
+    strokeCtx.fillStyle = "#ff0000";
+    strokeCtx.beginPath();
+    strokeCtx.arc(fullWidth / 2, fullHeight / 2, shortSide * 0.12, 0, Math.PI * 2);
+    strokeCtx.fill();
+
+    // Half of a stroke along the boundary falls outside the canvas.
+    strokeCtx.strokeStyle = "#0000ff";
+    strokeCtx.lineWidth = Math.max(4, shortSide * 0.06);
+    strokeCtx.strokeRect(0, 0, fullWidth, fullHeight);
+
+    latestMask = null;
+    redrawDisplay();
+    tryResults.hidden = true;
+    setStatus("Marked the center as foreground and the edges as background. Press Segment next.", false);
   });
 
   /** Read the stroke layer back as per-pixel FOREGROUND/BACKGROUND labels. */
@@ -669,8 +820,11 @@
   }
 
   segmentBtn.addEventListener("click", () => {
-    if (!strokeCtx) return;
-    segmentBtn.disabled = true;
+    if (!strokeCtx || segmenting) return;
+    // aria-disabled, not disabled: a disabled button loses keyboard focus, which
+    // would throw a keyboard user back to the top of the page.
+    segmenting = true;
+    segmentBtn.setAttribute("aria-disabled", "true");
     setStatus("Segmenting…", false);
 
     // Defer so the status paints before the synchronous solve blocks the thread.
@@ -681,15 +835,20 @@
         const elapsed = (performance.now() - start) / 1000;
         renderResult();
         tryResults.hidden = false;
+        // The picture alone says nothing to a screen reader, so say what came out.
+        const kept = latestMask.reduce((sum, value) => sum + value, 0);
+        const percent = Math.round((kept / latestMask.length) * 100);
+        resultCanvas.setAttribute("aria-label", `Segmented result: foreground covers ${percent}% of the image`);
         setStatus(
-          `Segmented in ${elapsed.toFixed(2)}s. Result is ${fullWidth}x${fullHeight}, ` +
-            "same as the upload.",
+          `Segmented in ${elapsed.toFixed(2)}s. Foreground covers ${percent}% of the image. ` +
+            `Result is ${fullWidth}x${fullHeight}, same as the upload.`,
           false
         );
       } catch (err) {
         setStatus(err.message || "Segmentation failed.", true);
       } finally {
-        segmentBtn.disabled = false;
+        segmenting = false;
+        segmentBtn.removeAttribute("aria-disabled");
       }
     }, 0);
   });

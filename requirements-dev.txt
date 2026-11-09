@@ -1,7 +1,8 @@
-# Tooling for regenerating the screenshots, demo GIF, and README diagram.
-# Not needed to run or test the app.
+# Tooling for regenerating the screenshots, demo GIF, and README diagram, and
+# for the browser accessibility tests. Not needed to run the app.
 #
 #     pip install -r requirements-dev.txt
 #     python -m playwright install chromium
 playwright
+axe-playwright-python
 imageio
