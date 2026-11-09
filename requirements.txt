@@ -1,5 +1,7 @@
-streamlit
-streamlit-drawable-canvas
+# Pinned together: streamlit-drawable-canvas 0.13 fails at import on current
+# Streamlit, and 0.9.3 relies on a Streamlit internal (see the shim in app.py).
+streamlit==1.62.0
+streamlit-drawable-canvas==0.9.3
 numpy
 opencv-python
 pytest
