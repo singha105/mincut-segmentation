@@ -25,6 +25,7 @@ real numbers.
 - [Screenshots](#screenshots)
 - [Install and usage](#install-and-usage)
 - [Performance](#performance)
+- [Learned regional term](#learned-regional-term)
 - [Project structure](#project-structure)
 - [The web page](#the-web-page)
 - [Design documents](#design-documents)
@@ -359,6 +360,48 @@ leans less on the refinement pass to recover boundary detail.
 > [`maxflow/fast_maxflow.py`](maxflow/fast_maxflow.py) loads it explicitly from
 > site-packages to get around that.
 
+## Learned regional term
+
+The default regional term compares each pixel's intensity with histograms built
+from the scribbles, so it struggles when the subject and background share a
+tonal range. [`learned/`](learned/) replaces that one term with a small U-Net's
+per-pixel probability. The N-links, the hard constraints and the solver stay as
+they are.
+
+On the 3,662 usable images of the Oxford-IIIT Pet test split, on a 128 px grid
+([`benchmarks/learned_unary.md`](benchmarks/learned_unary.md)):
+
+| Method | Foreground IoU | Pixel accuracy |
+| --- | ---: | ---: |
+| Graph cut, scribble histograms (existing) | 0.644 | 0.848 |
+| U-Net alone, ignores scribbles | 0.895 | 0.963 |
+| Graph cut, U-Net regional term | 0.902 | 0.966 |
+
+The U-Net has 1.9M parameters and trained on 3,312 images. Each graph cut's
+N-link weight was tuned on 368 validation images, and the dataset's border band
+is excluded from scoring.
+
+What this does and doesn't show:
+
+- **The U-Net does most of the work.** It reaches 0.895 by itself. The cut adds a
+  little accuracy and guarantees that marked pixels keep their labels.
+- **It only knows pets.** The histogram term needs no training and works on
+  anything. This model was trained on one kind of subject.
+- **The scribbles are simulated** from the ground truth, the same ones for every
+  method, so this is a fair comparison but not a study of real users.
+- **It's a benchmark.** It isn't wired into the app or the web page, and the
+  checkpoint isn't in the repo.
+
+To reproduce it, download `images.tar.gz` and `annotations.tar.gz` from the
+[dataset page](https://www.robots.ox.ac.uk/~vgg/data/pets/), extract both into
+one folder, then:
+
+```bash
+pip install -r requirements-ml.txt -r requirements-fast.txt
+python benchmarks/train_unet.py --data /path/to/pets --checkpoint unet.pt
+python benchmarks/compare_learned_unary.py --data /path/to/pets --checkpoint unet.pt
+```
+
 ## Project structure
 
 ```
@@ -372,6 +415,7 @@ mincut-segmentation/
 │   ├── edmonds_karp.py          from-scratch reference solver (dict graph)
 │   ├── grid_maxflow.py          same algorithm on numpy grid arrays (the fast path)
 │   └── fast_maxflow.py          optional Boykov-Kolmogorov via PyMaxflow
+├── learned/                     U-Net regional term and its benchmark data handling
 ├── segmentation/
 │   ├── segmenter.py             coarse cut, full-res refinement, mask and compositing
 │   └── cli.py                   command-line interface

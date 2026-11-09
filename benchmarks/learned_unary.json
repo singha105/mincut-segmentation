@@ -1,0 +1,23 @@
+{
+  "test_images": 3662,
+  "val_images": 368,
+  "train_images": 3312,
+  "grid": 128,
+  "model_parameters": 1942577,
+  "best_epoch": 23,
+  "histogram_graph_cut": {
+    "n_link_weight": 200.0,
+    "iou": 0.6440442635026356,
+    "accuracy": 0.8481930427419043
+  },
+  "unet_alone": {
+    "iou": 0.8948745038389395,
+    "accuracy": 0.9631818520599686
+  },
+  "learned_graph_cut": {
+    "n_link_weight": 20.0,
+    "iou": 0.9021207169936333,
+    "accuracy": 0.9658856259715903
+  },
+  "solve_seconds_all_test_images": 67.7996461391449
+}

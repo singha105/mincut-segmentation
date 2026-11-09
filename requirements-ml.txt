@@ -1,0 +1,3 @@
+# Optional: train and evaluate the U-Net regional term in learned/.
+# Not needed to run the app.
+torch
