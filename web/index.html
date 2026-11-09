@@ -428,9 +428,64 @@
       grid-template-columns: 1fr;
     }
   }
+
+  /* .try-actions and friends set display: flex, which would otherwise beat the
+     hidden attribute and show empty panels before there is anything in them. */
+  [hidden] { display: none !important; }
+
+  .skip-link {
+    position: absolute;
+    left: 12px;
+    top: -60px;
+    z-index: 100;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .skip-link:focus { top: 12px; }
+
+  :focus-visible,
+  .file-label input:focus-visible + .btn {
+    outline: 3px solid #ffffff;
+    outline-offset: 2px;
+  }
+
+  .try-status { text-align: center; min-height: 1.3em; }
+
+  .keyboard-help {
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-align: center;
+    max-width: 66ch;
+  }
+
+  .keyboard-help kbd {
+    font-family: var(--mono);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    padding: 0 5px;
+  }
+
+  .btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+
+    .btn:hover { transform: none; }
+  }
 </style>
 </head>
 <body>
+
+<a class="skip-link" href="#try-it">Skip to the demo</a>
 
 <header class="nav">
   <div class="wrap">
@@ -438,9 +493,11 @@
       <span class="dot"></span>
       mincut-segmentation
     </a>
-    <a class="gh" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">GitHub ↗</a>
+    <a class="gh" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">GitHub ↗<span class="visually-hidden"> (opens in a new tab)</span></a>
   </div>
 </header>
+
+<main id="main">
 
 <div id="top" class="hero">
   <div class="wrap">
@@ -452,7 +509,7 @@
     </p>
     <div class="cta-row">
       <a class="btn primary" href="#try-it">Try it now</a>
-      <a class="btn secondary" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">View source</a>
+      <a class="btn secondary" href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">View source<span class="visually-hidden"> (opens in a new tab)</span></a>
     </div>
     <div class="badges">
       <span class="badge">Python</span>
@@ -516,7 +573,7 @@
         </label>
 
         <div class="scribble-controls" id="scribbleControls" hidden>
-          <div class="radio-group">
+          <div class="radio-group" role="radiogroup" aria-label="Scribble type">
             <label><input type="radio" name="scribbleMode" value="fg" checked> Foreground (red)</label>
             <label><input type="radio" name="scribbleMode" value="bg"> Background (blue)</label>
           </div>
@@ -533,30 +590,43 @@
             </select>
           </label>
           <button class="btn secondary" id="clearScribblesBtn" type="button">Clear scribbles</button>
+          <button class="btn secondary" id="autoMarkBtn" type="button">Mark center and edges</button>
         </div>
       </div>
 
       <div id="canvasWrap" class="canvas-wrap" hidden>
-        <canvas id="tryCanvas"></canvas>
+        <canvas id="tryCanvas" tabindex="0" role="application" aria-roledescription="drawing canvas"
+                aria-label="Image to scribble on" aria-describedby="keyboardHelp"></canvas>
       </div>
+
+      <p id="keyboardHelp" class="keyboard-help" hidden>
+        Keyboard: focus the image, use the <kbd>arrow keys</kbd> to move the brush
+        (hold <kbd>Shift</kbd> for bigger steps), <kbd>Space</kbd> to start or stop
+        painting, <kbd>F</kbd> for foreground and <kbd>B</kbd> for background.
+        Prefer not to draw? <strong>Mark center and edges</strong> does it for you.
+      </p>
 
       <div class="try-actions" id="tryActions" hidden>
         <button class="btn primary" id="segmentBtn" type="button">Segment</button>
-        <span id="tryStatus" class="try-status"></span>
       </div>
+
+      <!-- Live regions must be in the page before their text changes, so these
+           two stay outside anything that starts out hidden. -->
+      <div id="tryStatus" class="try-status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="canvasAnnouncer" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
 
       <div id="tryResults" class="try-results" hidden>
         <div class="try-results-grid">
           <div class="result-panel">
-            <canvas id="originalResultCanvas"></canvas>
+            <canvas id="originalResultCanvas" role="img" aria-label="Original image"></canvas>
             <div class="result-caption">Original</div>
           </div>
           <div class="result-panel">
-            <canvas id="scribbleResultCanvas"></canvas>
+            <canvas id="scribbleResultCanvas" role="img" aria-label="Image with your scribbles"></canvas>
             <div class="result-caption">Scribbles</div>
           </div>
           <div class="result-panel">
-            <canvas id="resultCanvas"></canvas>
+            <canvas id="resultCanvas" role="img" aria-label="Segmented result"></canvas>
             <div class="result-caption">Segmented result</div>
           </div>
         </div>
@@ -650,15 +720,17 @@ streamlit run app.py</div></div>
   </div>
 </section>
 
+</main>
+
 <footer>
   <div class="wrap">
     <span>MIT License</span>
-    <a href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">github.com/singha105/mincut-segmentation</a>
+    <a href="https://github.com/singha105/mincut-segmentation" target="_blank" rel="noopener">github.com/singha105/mincut-segmentation<span class="visually-hidden"> (opens in a new tab)</span></a>
   </div>
 </footer>
 
 <!-- ?v= is bumped whenever segmentation.js changes so browsers don't serve a
      stale cached copy of the solver. -->
-<script src="segmentation.js?v=3"></script>
+<script src="segmentation.js?v=4"></script>
 </body>
 </html>
