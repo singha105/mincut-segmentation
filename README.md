@@ -389,8 +389,9 @@ What this does and doesn't show:
   anything. This model was trained on one kind of subject.
 - **The scribbles are simulated** from the ground truth, the same ones for every
   method, so this is a fair comparison but not a study of real users.
-- **It's a benchmark.** It isn't wired into the app or the web page, and the
-  checkpoint isn't in the repo.
+- **It's a benchmark.** It isn't wired into the app or the web page. The trained
+  weights aren't in the repo; they're attached to the
+  [`unet-weights-v1` release](https://github.com/singha105/mincut-segmentation/releases/tag/unet-weights-v1).
 
 To reproduce it, download `images.tar.gz` and `annotations.tar.gz` from the
 [dataset page](https://www.robots.ox.ac.uk/~vgg/data/pets/), extract both into
@@ -401,6 +402,9 @@ pip install -r requirements-ml.txt -r requirements-fast.txt
 python benchmarks/train_unet.py --data /path/to/pets --checkpoint unet.pt
 python benchmarks/compare_learned_unary.py --data /path/to/pets --checkpoint unet.pt
 ```
+
+To skip training, download `unet.pt` from that release and run only the last
+command.
 
 ## Project structure
 
